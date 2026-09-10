@@ -14,10 +14,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Thin typed wrapper over the OpenCode HTTP API (v1, `/global/*` & `/api/*` groups).
+ * Thin typed wrapper over the OpenCode HTTP API (v1, the `/global` and `/api` route groups).
  *
  * Phase 1 only needs the health probe. As more features land (sessions,
- * messages, events) their calls are added here — one method per endpoint,
+ * messages, events) their calls are added here - one method per endpoint,
  * keeping serialization concerns out of the repository layer.
  */
 @Singleton
