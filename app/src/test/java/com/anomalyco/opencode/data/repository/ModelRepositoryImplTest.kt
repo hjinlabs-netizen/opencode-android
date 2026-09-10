@@ -69,8 +69,29 @@ class ModelRepositoryImplTest {
         assertEquals("Claude Y", anthropic.models[1].displayName)
         // Only one model is current across the whole catalog.
         assertEquals(1, providers.flatMap { it.models }.count { it.isCurrent })
-        // Providers absent from `connected` degrade to disconnected.
-        assertFalse(providers.first { it.providerId == "openai" }.isConnected)
+        // OpenCode omits/mismatches the optional `connected` hint; providers
+        // that advertise models stay selectable (models presence wins).
+        assertTrue(providers.first { it.providerId == "openai" }.isConnected)
+    }
+
+    @Test
+    fun `provider with no models and a foreign connected list stays disconnected`() = runTest {
+        val body = """
+            {"all":[{"id":"ghostly","name":"Ghostly","models":[]}],"connected":["someone-else"]}
+        """.trimIndent()
+        val providers = repository(providerBody = body).fetchProviders().getOrThrow()
+
+        assertFalse(providers.single().isConnected)
+    }
+
+    @Test
+    fun `connected hint matches provider id case-insensitively`() = runTest {
+        val body = """
+            {"all":[{"id":"Anthropic","models":[{"id":"claude-x"}]}],"connected":["anthropic"]}
+        """.trimIndent()
+        val providers = repository(providerBody = body).fetchProviders().getOrThrow()
+
+        assertTrue(providers.single().isConnected)
     }
 
     @Test

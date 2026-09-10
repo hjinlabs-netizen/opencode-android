@@ -30,11 +30,23 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideJson(): Json = Json {
+    fun provideJson(): Json = opencodeJson()
+
+    /**
+     * Single source of truth for wire JSON behaviour — production and unit
+     * tests encode/decode through this exact configuration.
+     *
+     * `explicitNulls = false` is load-bearing: with the kotlinx default the
+     * client sent `POST /session {"title":null,"agent":null}`, which the
+     * OpenCode server schema rejects with HTTP 400. Optional fields must be
+     * ABSENT (an empty `{}` body), not null.
+     */
+    internal fun opencodeJson(): Json = Json {
         ignoreUnknownKeys = true
         isLenient = true
         encodeDefaults = true
         coerceInputValues = true
+        explicitNulls = false
     }
 
     @Provides

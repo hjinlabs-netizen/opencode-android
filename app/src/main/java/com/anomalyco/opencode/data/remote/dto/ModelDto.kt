@@ -41,10 +41,21 @@ data class ProviderListDto(
         ProviderConfig(
             providerId = providerId,
             displayName = provider.name ?: providerId,
-            isConnected = providerId in connected || connected.isEmpty(),
+            // `connected` is an OPTIONAL server hint and several builds omit
+            // it or list ids that never match the catalog. Treat a provider
+            // as usable when the list is absent, mentions it (case-insensitive)
+            // or — crucially — when it exposes models at all: advertised
+            // models are by definition selectable, and gating them behind a
+            // missing hint disabled the entire picker.
+            isConnected = provider.connectedHint(connected),
             models = provider.models.map { model -> model.toInfo(providerId, current) },
         )
     }
+
+    private fun ProviderDto.connectedHint(connected: List<String>): Boolean =
+        connected.isEmpty() ||
+            models.isNotEmpty() ||
+            connected.any { it.equals((id ?: providerId).orEmpty(), ignoreCase = true) }
 }
 
 /**

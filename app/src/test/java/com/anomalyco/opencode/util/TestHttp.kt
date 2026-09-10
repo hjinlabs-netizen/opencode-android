@@ -15,7 +15,6 @@ import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.serialization.json.Json
 
 /** [ConnectionRepository] double serving a fixed (absent) server config. */
 class FakeConnectionRepository(
@@ -34,7 +33,11 @@ data class MockResponse(
     val body: String = "",
 )
 
-/** JSON [HttpClient] backed by a scriptable, request-recording MockEngine. */
+/**
+ * JSON [HttpClient] backed by a scriptable, request-recording MockEngine.
+ * Uses the PRODUCTION Json config so wire-shape regressions (e.g. null vs
+ * omitted optional fields) reproduce identically in tests.
+ */
 fun recordingClient(
     captured: MutableList<HttpRequestData>,
     script: (HttpRequestData) -> MockResponse,
@@ -51,7 +54,7 @@ fun recordingClient(
 ) {
     expectSuccess = false
     install(ContentNegotiation) {
-        json(Json { ignoreUnknownKeys = true; encodeDefaults = true })
+        json(com.anomalyco.opencode.di.NetworkModule.opencodeJson())
     }
 }
 

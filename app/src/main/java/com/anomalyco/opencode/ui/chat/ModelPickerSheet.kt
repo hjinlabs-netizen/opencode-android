@@ -17,15 +17,23 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,9 +43,9 @@ import com.anomalyco.opencode.domain.model.ModelInfo
 import com.anomalyco.opencode.domain.model.ProviderConfig
 
 /**
- * Bottom sheet listing every connected provider and its models; the active
- * one carries a check. Selecting a model calls [onSelect], which performs the
- * `POST /config` switch and dismisses on success.
+ * Bottom sheet listing every provider and its models with a live search box;
+ * the active model carries a check. Selecting a model calls [onSelect], which
+ * performs the `POST /config` switch and dismisses on success.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,12 +57,33 @@ fun ModelPickerSheet(
     onSelect: (ModelInfo) -> Unit,
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
 ) {
+    var query by remember { mutableStateOf("") }
+    val visible = filterProviders(providers, query)
+
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(modifier = Modifier.padding(bottom = 16.dp)) {
             Text(
                 text = "Model seç",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(start = 20.dp, bottom = 8.dp),
+            )
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                placeholder = { Text("Model veya sağlayıcı ara…") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Aramayı temizle")
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
             )
             if (isLoading && providers.isEmpty()) {
                 Box(
@@ -65,8 +94,17 @@ fun ModelPickerSheet(
                 ) { CircularProgressIndicator() }
                 return@Column
             }
+            if (visible.isEmpty()) {
+                Text(
+                    text = if (query.isNotBlank()) "Eşleşen model yok" else "Model bulunamadı",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                )
+                return@Column
+            }
             LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp)) {
-                providers.forEach { provider ->
+                visible.forEach { provider ->
                     item(key = "hdr-${provider.providerId}") {
                         Text(
                             text = provider.displayName +
@@ -86,6 +124,35 @@ fun ModelPickerSheet(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Pure catalog filter powering the sheet's search box. A provider-level match
+ * keeps the whole provider; otherwise only the matching models are kept
+ * (provider header stays as context). Case-insensitive on `displayName`,
+ * `modelId`, `qualifiedId`, `providerId` and provider display name.
+ */
+internal fun filterProviders(
+    providers: List<ProviderConfig>,
+    query: String,
+): List<ProviderConfig> {
+    val needle = query.trim().lowercase()
+    if (needle.isEmpty()) return providers
+    return providers.mapNotNull { provider ->
+        val providerMatches =
+            provider.providerId.lowercase().contains(needle) ||
+                provider.displayName.lowercase().contains(needle)
+        if (providerMatches) {
+            provider
+        } else {
+            val models = provider.models.filter { model ->
+                model.displayName.lowercase().contains(needle) ||
+                    model.modelId.lowercase().contains(needle) ||
+                    model.qualifiedId.lowercase().contains(needle)
+            }
+            provider.takeIf { models.isNotEmpty() }?.copy(models = models)
         }
     }
 }
