@@ -6,13 +6,16 @@ import androidx.lifecycle.viewModelScope
 import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.MessagePart
 import com.anomalyco.opencode.domain.model.MessageRole
+import com.anomalyco.opencode.domain.model.ModelInfo
 import com.anomalyco.opencode.domain.model.PermissionDecision
 import com.anomalyco.opencode.domain.model.PermissionRequest
+import com.anomalyco.opencode.domain.model.ProviderConfig
 import com.anomalyco.opencode.domain.model.QuestionRequest
 import com.anomalyco.opencode.domain.model.StreamEvent
 import com.anomalyco.opencode.domain.model.StreamStatus
 import com.anomalyco.opencode.domain.repository.ChatStreamRepository
 import com.anomalyco.opencode.domain.repository.InteractionRepository
+import com.anomalyco.opencode.domain.repository.ModelRepository
 import com.anomalyco.opencode.domain.repository.SessionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,9 +67,14 @@ data class ChatUiState(
     val pendingInteractions: List<PendingInteraction> = emptyList(),
     /** Whether the front-most interaction is shown as a dialog. */
     val interactionVisible: Boolean = true,
+    /** --- model & agent picker --- */
+    val providers: List<ProviderConfig> = emptyList(),
+    val currentModel: ModelInfo? = null,
+    val isLoadingProviders: Boolean = false,
+    val isModelPickerOpen: Boolean = false,
+    val switchingModelId: String? = null,
     val error: String? = null,
 )
-
 /**
  * Owns one chat room: initial transcript, live stream stitching (via
  * [MessageAssembler]) and prompt sending. Events for other sessions are
@@ -78,6 +86,7 @@ class ChatViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val chatStreamRepository: ChatStreamRepository,
     private val interactionRepository: InteractionRepository,
+    private val modelRepository: ModelRepository,
 ) : ViewModel() {
 
     private val sessionId: String = savedStateHandle[ARG_SESSION_ID] ?: ""
@@ -128,6 +137,68 @@ class ChatViewModel @Inject constructor(
     fun onAgentChange(mode: AgentMode) = _uiState.update { it.copy(agent = mode) }
 
     fun onErrorShown() = _uiState.update { it.copy(error = null) }
+
+    // ---- model & agent picker ------------------------------------------------
+
+    /** Fetches the provider catalog (idempotent unless [force]); feeds the top-bar chip. */
+    fun loadProviders(force: Boolean = false) {
+        if (!force && _uiState.value.providers.isNotEmpty()) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingProviders = true) }
+            modelRepository.fetchProviders()
+                .onSuccess { providers ->
+                    _uiState.update { current ->
+                        current.copy(
+                            providers = providers,
+                            currentModel = providers
+                                .flatMap { it.models }
+                                .firstOrNull { it.isCurrent },
+                            isLoadingProviders = false,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(isLoadingProviders = false, error = error.message)
+                    }
+                }
+        }
+    }
+
+    fun openModelPicker() {
+        _uiState.update { it.copy(isModelPickerOpen = true) }
+        loadProviders()
+    }
+
+    fun closeModelPicker() = _uiState.update { it.copy(isModelPickerOpen = false) }
+
+    /** Switches the active model and re-flags the catalog on success. */
+    fun selectModel(model: ModelInfo) {
+        if (_uiState.value.switchingModelId != null) return
+        _uiState.update { it.copy(switchingModelId = model.qualifiedId) }
+        viewModelScope.launch {
+            modelRepository.setActiveModel(model.providerId, model.modelId)
+                .onSuccess {
+                    _uiState.update { current ->
+                        current.copy(
+                            switchingModelId = null,
+                            isModelPickerOpen = false,
+                            currentModel = model,
+                            providers = current.providers.map { provider ->
+                                provider.copy(
+                                    models = provider.models.map {
+                                        it.copy(isCurrent = it.qualifiedId == model.qualifiedId)
+                                    },
+                                )
+                            },
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(switchingModelId = null, error = error.message) }
+                }
+        }
+    }
 
     /** Send the current input as a user prompt (optimistic append). */
     fun send() {

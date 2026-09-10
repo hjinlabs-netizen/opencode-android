@@ -23,6 +23,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Difference
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Badge
@@ -45,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -68,6 +72,8 @@ import com.anomalyco.opencode.ui.theme.Warning
 @Composable
 fun ChatScreen(
     onBack: () -> Unit,
+    onOpenFiles: () -> Unit = {},
+    onOpenDiff: () -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -91,11 +97,39 @@ fun ChatScreen(
                             style = MaterialTheme.typography.titleMedium,
                             maxLines = 1,
                         )
-                        Text(
-                            text = state.streamStatus.label(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = streamStatusColor(state.streamStatus),
-                        )
+                        // Tappable model chip → provider/model picker sheet.
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    if (state.isLoadingProviders) {
+                                        viewModel.loadProviders(force = true)
+                                    } else {
+                                        viewModel.openModelPicker()
+                                    }
+                                },
+                        ) {
+                            Text(
+                                text = state.currentModel?.displayName
+                                    ?: if (state.isLoadingProviders) "Model yükleniyor…" else "Model seç",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                maxLines = 1,
+                            )
+                            Icon(
+                                imageVector = Icons.Filled.ArrowDropDown,
+                                contentDescription = "Modeli değiştir",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.tertiary,
+                            )
+                            Text(
+                                text = "· ${state.streamStatus.label()}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = streamStatusColor(state.streamStatus),
+                                maxLines = 1,
+                            )
+                        }
                     }
                 },
                 navigationIcon = {
@@ -118,6 +152,12 @@ fun ChatScreen(
                                 contentDescription = "Bekleyen istekler",
                             )
                         }
+                    }
+                    IconButton(onClick = onOpenFiles) {
+                        Icon(Icons.Filled.Folder, contentDescription = "Dosyalar")
+                    }
+                    IconButton(onClick = onOpenDiff) {
+                        Icon(Icons.Filled.Difference, contentDescription = "Değişiklikler")
                     }
                     IconButton(onClick = viewModel::refresh) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Yenile")
@@ -165,6 +205,16 @@ fun ChatScreen(
                 onDismiss = viewModel::hideInteraction,
             )
         }
+    }
+
+    if (state.isModelPickerOpen) {
+        ModelPickerSheet(
+            providers = state.providers,
+            isLoading = state.isLoadingProviders,
+            switchingModelId = state.switchingModelId,
+            onDismiss = viewModel::closeModelPicker,
+            onSelect = viewModel::selectModel,
+        )
     }
 }
 

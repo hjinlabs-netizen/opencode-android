@@ -1,8 +1,14 @@
 package com.anomalyco.opencode.data.remote
 
+import com.anomalyco.opencode.data.remote.dto.ConfigDto
+import com.anomalyco.opencode.data.remote.dto.ConfigPatchDto
 import com.anomalyco.opencode.data.remote.dto.CreateSessionRequest
+import com.anomalyco.opencode.data.remote.dto.FileContentDto
+import com.anomalyco.opencode.data.remote.dto.FileDiffDto
+import com.anomalyco.opencode.data.remote.dto.FileNodeDto
 import com.anomalyco.opencode.data.remote.dto.MessageDto
 import com.anomalyco.opencode.data.remote.dto.PermissionResponseRequest
+import com.anomalyco.opencode.data.remote.dto.ProviderListDto
 import com.anomalyco.opencode.data.remote.dto.QuestionReplyRequest
 import com.anomalyco.opencode.data.remote.dto.SendMessageRequest
 import com.anomalyco.opencode.data.remote.dto.SessionDto
@@ -12,6 +18,7 @@ import io.ktor.client.call.body
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -132,13 +139,50 @@ class OpenCodeApi @Inject constructor(
         request,
     ).let { }
 
+    // ---- filesystem & model catalog (Phase 3) ----
+
+    /** `GET /fs/list?path=` — one level of the project directory listing. */
+    suspend fun listFiles(baseUrl: String, token: String, path: String): List<FileNodeDto> =
+        authorizedGet(baseUrl, token, FS_LIST_PATH) { parameter("path", path) }.body()
+
+    /** `GET /fs/read?path=` — UTF-8 contents of a single file. */
+    suspend fun readFile(baseUrl: String, token: String, path: String): FileContentDto =
+        authorizedGet(baseUrl, token, FS_READ_PATH) { parameter("path", path) }.body()
+
+    /** `GET /fs/diff[?path=]` — working-tree diff rows (raw patch text). */
+    suspend fun diffFiles(baseUrl: String, token: String, path: String?): List<FileDiffDto> =
+        authorizedGet(baseUrl, token, FS_DIFF_PATH) {
+            if (!path.isNullOrEmpty()) parameter("path", path)
+        }.body()
+
+    /** `GET /provider` — catalog of supported providers/models. */
+    suspend fun getProviders(baseUrl: String, token: String): ProviderListDto =
+        authorizedGet(baseUrl, token, PROVIDER_PATH).body()
+
+    /** `GET /config` — server configuration subset (active model). */
+    suspend fun getConfig(baseUrl: String, token: String): ConfigDto =
+        authorizedGet(baseUrl, token, CONFIG_PATH).body()
+
+    /** `POST /config` — patch the configuration (model switching). */
+    suspend fun updateConfig(
+        baseUrl: String,
+        token: String,
+        patch: ConfigPatchDto,
+    ): Unit = authorizedPost(baseUrl, token, CONFIG_PATH, patch).let { }
+
     // ---- shared request/auth helpers ----
 
     private suspend fun authorizedGet(
         baseUrl: String,
         token: String,
         path: String,
-    ): HttpResponse = validated { client.get("$baseUrl$path") { authorize(token) } }
+        configure: HttpRequestBuilder.() -> Unit = {},
+    ): HttpResponse = validated {
+        client.get("$baseUrl$path") {
+            authorize(token)
+            configure()
+        }
+    }
 
     private suspend fun authorizedPost(
         baseUrl: String,
@@ -173,6 +217,11 @@ class OpenCodeApi @Inject constructor(
         const val MESSAGES_SUFFIX = "message"
         const val PERMISSIONS_PATH = "/permission"
         const val QUESTIONS_PATH = "/question"
+        const val FS_LIST_PATH = "/fs/list"
+        const val FS_READ_PATH = "/fs/read"
+        const val FS_DIFF_PATH = "/fs/diff"
+        const val PROVIDER_PATH = "/provider"
+        const val CONFIG_PATH = "/config"
     }
 }
 

@@ -2,11 +2,15 @@ package com.anomalyco.opencode.di
 
 import com.anomalyco.opencode.domain.repository.ChatStreamRepository
 import com.anomalyco.opencode.domain.repository.ConnectionRepository
+import com.anomalyco.opencode.domain.repository.FileRepository
 import com.anomalyco.opencode.domain.repository.InteractionRepository
+import com.anomalyco.opencode.domain.repository.ModelRepository
 import com.anomalyco.opencode.domain.repository.SessionRepository
 import com.anomalyco.opencode.data.repository.ChatStreamRepositoryImpl
 import com.anomalyco.opencode.data.repository.ConnectionRepositoryImpl
+import com.anomalyco.opencode.data.repository.FileRepositoryImpl
 import com.anomalyco.opencode.data.repository.InteractionRepositoryImpl
+import com.anomalyco.opencode.data.repository.ModelRepositoryImpl
 import com.anomalyco.opencode.data.repository.SessionRepositoryImpl
 import dagger.Binds
 import dagger.Module
@@ -37,4 +41,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindInteractionRepository(impl: InteractionRepositoryImpl): InteractionRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindFileRepository(impl: FileRepositoryImpl): FileRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindModelRepository(impl: ModelRepositoryImpl): ModelRepository
 }

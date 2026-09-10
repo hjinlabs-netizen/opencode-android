@@ -3,8 +3,10 @@ package com.anomalyco.opencode.ui.chat
 import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.MessagePart
 import com.anomalyco.opencode.domain.model.MessageRole
+import com.anomalyco.opencode.domain.model.ModelInfo
 import com.anomalyco.opencode.domain.model.PermissionDecision
 import com.anomalyco.opencode.domain.model.PermissionRequest
+import com.anomalyco.opencode.domain.model.ProviderConfig
 import com.anomalyco.opencode.domain.model.QuestionRequest
 import com.anomalyco.opencode.domain.model.Session
 import com.anomalyco.opencode.domain.model.SessionSummary
@@ -12,6 +14,7 @@ import com.anomalyco.opencode.domain.model.StreamEvent
 import com.anomalyco.opencode.domain.model.StreamStatus
 import com.anomalyco.opencode.domain.repository.ChatStreamRepository
 import com.anomalyco.opencode.domain.repository.InteractionRepository
+import com.anomalyco.opencode.domain.repository.ModelRepository
 import com.anomalyco.opencode.domain.repository.SessionRepository
 import com.anomalyco.opencode.util.MainDispatcherRule
 import androidx.lifecycle.SavedStateHandle
@@ -81,17 +84,36 @@ private class FakeInteractionRepository : InteractionRepository {
     }
 }
 
+private class FakeModelRepository : ModelRepository {
+    var providersResult: Result<List<ProviderConfig>> = Result.success(emptyList())
+    var setResult: Result<Unit> = Result.success(Unit)
+    var fetchCalls = 0
+    val setCalls = mutableListOf<Pair<String, String>>()
+
+    override suspend fun fetchProviders(): Result<List<ProviderConfig>> {
+        fetchCalls++
+        return providersResult
+    }
+
+    override suspend fun setActiveModel(providerId: String, modelId: String): Result<Unit> {
+        setCalls += providerId to modelId
+        return setResult
+    }
+}
+
 /** All collaborators + the ViewModel built under test. */
 private class ChatHarness(
     val viewModel: ChatViewModel,
     val sessions: FakeSessionRepository,
     val stream: FakeStreamRepository,
     val interactions: FakeInteractionRepository,
+    val models: FakeModelRepository,
 ) {
     operator fun component1() = viewModel
     operator fun component2() = sessions
     operator fun component3() = stream
     operator fun component4() = interactions
+    operator fun component5() = models
 }
 
 class ChatViewModelTest {
@@ -103,13 +125,15 @@ class ChatViewModelTest {
         val sessions = FakeSessionRepository().apply { this.history = history }
         val stream = FakeStreamRepository()
         val interactions = FakeInteractionRepository()
+        val models = FakeModelRepository()
         val vm = ChatViewModel(
             SavedStateHandle(mapOf("sessionId" to "s1")),
             sessions,
             stream,
             interactions,
+            models,
         )
-        return ChatHarness(vm, sessions, stream, interactions)
+        return ChatHarness(vm, sessions, stream, interactions, models)
     }
 
     private fun assistant(id: String) = ChatMessage(
@@ -371,5 +395,76 @@ class ChatViewModelTest {
 
         vm.showInteraction()
         assertTrue(vm.uiState.value.interactionVisible)
+    }
+
+    // ---- model picker -------------------------------------------------------
+
+    private fun catalog(current: Boolean) = listOf(
+        ProviderConfig(
+            providerId = "anthropic",
+            displayName = "Anthropic",
+            models = listOf(
+                ModelInfo("anthropic", "claude-a", "Claude A", isCurrent = current),
+                ModelInfo("anthropic", "claude-b", "Claude B", isCurrent = false),
+            ),
+        ),
+    )
+
+    @Test
+    fun `openModelPicker lazily loads the catalog and flags the current model`() = runTest {
+        val (vm, _, _, _, models) = build()
+        models.providersResult = Result.success(catalog(current = false))
+        advanceUntilIdle()
+
+        vm.openModelPicker()
+        advanceUntilIdle()
+
+        assertEquals(1, models.fetchCalls)
+        assertTrue(vm.uiState.value.isModelPickerOpen)
+        assertEquals(2, vm.uiState.value.providers.single().models.size)
+
+        // Second open is served from cache.
+        vm.openModelPicker()
+        advanceUntilIdle()
+        assertEquals(1, models.fetchCalls)
+    }
+
+    @Test
+    fun `selectModel posts the switch, re-flags the catalog and closes the sheet`() = runTest {
+        val (vm, _, _, _, models) = build()
+        models.providersResult = Result.success(catalog(current = false))
+        vm.loadProviders()
+        advanceUntilIdle()
+        vm.openModelPicker()
+
+        val target = vm.uiState.value.providers.single().models[1]
+        vm.selectModel(target)
+        advanceUntilIdle()
+
+        assertEquals(listOf("anthropic" to "claude-b"), models.setCalls)
+        assertFalse(vm.uiState.value.isModelPickerOpen)
+        assertEquals("claude-b", vm.uiState.value.currentModel?.modelId)
+        val flags = vm.uiState.value.providers.single().models.map { it.isCurrent }
+        assertEquals(listOf(false, true), flags)
+    }
+
+    @Test
+    fun `failed model switch keeps the sheet open and surfaces the error`() = runTest {
+        val (vm, _, _, _, models) = build()
+        models.providersResult = Result.success(catalog(current = false))
+        models.setResult = Result.failure(Exception("model kullanılamıyor"))
+        vm.loadProviders()
+        advanceUntilIdle()
+        vm.openModelPicker()
+
+        vm.selectModel(vm.uiState.value.providers.single().models[1])
+        advanceUntilIdle()
+
+        assertEquals("model kullanılamıyor", vm.uiState.value.error)
+        assertTrue(vm.uiState.value.isModelPickerOpen)
+        assertNull(vm.uiState.value.switchingModelId)
+        // Catalog flags are untouched after a failed switch.
+        assertEquals(0, vm.uiState.value.providers.flatMap { it.models }.count { it.isCurrent })
+        assertNull(vm.uiState.value.currentModel)
     }
 }
