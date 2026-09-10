@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    OpenCode Android is a thin client for user-supplied OpenCode servers,
+    which in the primary (self-hosted / LAN) scenario run plain HTTP, e.g.
+    http://192.168.1.69:4096 ("opencode serve"). Android's default policy
+    blocks that traffic on API 28+.
+
+    Cleartext is therefore permitted at the base-config level for ALL builds:
+    the reachable hosts are arbitrary LAN addresses and custom ports that
+    cannot be enumerated as domain rules. Bearer-token auth guards the API
+    itself; TLS (https://) remains fully supported and validated as usual —
+    no user CA certificates are trusted and no pins are loosened here.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
