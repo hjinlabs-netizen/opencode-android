@@ -98,7 +98,18 @@ class ChatViewModel @Inject constructor(
     init {
         refresh()
         viewModelScope.launch {
+            // Resilience (Phase 4): when a dropped stream reconnects and goes
+            // healthy again, events missed during the outage are gone for good
+            // (the feed is replay=0). Re-pull the transcript so the visible
+            // state converges on the server truth instead of freezing with
+            // half-finished bubbles. The in-flight live bubble is preserved by
+            // refresh(); completed turns are replaced wholesale.
+            var previous: StreamStatus = _uiState.value.streamStatus
             chatStreamRepository.status.collect { s ->
+                if (previous is StreamStatus.Error && s == StreamStatus.Connected) {
+                    refresh()
+                }
+                previous = s
                 _uiState.update { it.copy(streamStatus = s) }
             }
         }

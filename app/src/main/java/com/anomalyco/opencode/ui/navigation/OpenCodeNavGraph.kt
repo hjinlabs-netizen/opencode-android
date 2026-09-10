@@ -13,10 +13,12 @@ import com.anomalyco.opencode.ui.files.DiffScreen
 import com.anomalyco.opencode.ui.files.FileExplorerScreen
 import com.anomalyco.opencode.ui.files.FileExplorerViewModel
 import com.anomalyco.opencode.ui.session.SessionListScreen
+import com.anomalyco.opencode.ui.settings.SettingsScreen
 
 /**
  * Single navigation graph: connection gate -> session list -> chat room,
- * with the Phase 3 file explorer and diff viewer hanging off the chat.
+ * with the Phase 3 file explorer / diff viewer and Phase 4 settings
+ * hanging off the chat and session list respectively.
  */
 object Routes {
     const val CONNECTION = "connection"
@@ -25,14 +27,19 @@ object Routes {
     const val CHAT = "chat/{$CHAT_ARGUMENT}"
     const val FILES = "files"
     const val DIFF = "diff"
-    const val SETTINGS = "settings" // Phase 4+
+    const val SETTINGS = "settings"
 
     /** Type-safe route builder for the chat destination. */
     fun chat(sessionId: String) = "chat/$sessionId"
 
     /** Opens the file explorer previewing [path] (empty = project root). */
     fun files(path: String = "") =
-        if (path.isBlank()) FILES else "$FILES?${FileExplorerViewModel.ARG_PATH}=$path"
+        if (path.isBlank()) {
+            FILES
+        } else {
+            "$FILES?${FileExplorerViewModel.ARG_PATH}=" +
+                android.net.Uri.encode(path)
+        }
 }
 
 @Composable
@@ -59,6 +66,9 @@ fun OpenCodeNavGraph(
             SessionListScreen(
                 onOpenChat = { sessionId ->
                     navController.navigate(Routes.chat(sessionId))
+                },
+                onOpenSettings = {
+                    navController.navigate(Routes.SETTINGS)
                 },
             )
         }
@@ -90,6 +100,18 @@ fun OpenCodeNavGraph(
 
         composable(Routes.DIFF) {
             DiffScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onManageConnection = {
+                    navController.navigate(Routes.CONNECTION) {
+                        popUpTo(Routes.SETTINGS) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+            )
         }
     }
 }

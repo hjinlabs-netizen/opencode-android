@@ -37,6 +37,7 @@ private class FakeSessionRepository : SessionRepository {
 
     var history: List<ChatMessage> = emptyList()
     var session: Session = Session(id = "s1", title = "Ses")
+    var loadCalls = 0
     var sendResult: (String) -> Result<ChatMessage> = {
         Result.success(ChatMessage(id = "server-user", sessionId = "s1", role = MessageRole.USER))
     }
@@ -48,7 +49,10 @@ private class FakeSessionRepository : SessionRepository {
     override suspend fun refreshSessions(): Result<List<SessionSummary>> = Result.success(emptyList())
     override suspend fun createSession(agent: String?, title: String?) = Result.success(session)
     override suspend fun getSession(sessionId: String) = Result.success(session)
-    override suspend fun loadMessages(sessionId: String) = Result.success(history)
+    override suspend fun loadMessages(sessionId: String): Result<List<ChatMessage>> {
+        loadCalls++
+        return Result.success(history)
+    }
     override suspend fun sendPrompt(sessionId: String, text: String, agent: String?): Result<ChatMessage> {
         lastPrompt = text to agent
         sendGate?.await()
@@ -466,5 +470,48 @@ class ChatViewModelTest {
         // Catalog flags are untouched after a failed switch.
         assertEquals(0, vm.uiState.value.providers.flatMap { it.models }.count { it.isCurrent })
         assertNull(vm.uiState.value.currentModel)
+    }
+
+    // ---- Phase 4 resilience -------------------------------------------------
+
+    @Test
+    fun `stream recovery after an error triggers a transcript resync`() = runTest {
+        val (vm, sessions, stream) = build()
+        advanceUntilIdle()
+        val baseline = sessions.loadCalls
+
+        stream.statusFlow.value = StreamStatus.Error("dropped")
+        advanceUntilIdle()
+        assertEquals(baseline, sessions.loadCalls) // the drop itself must not resync
+
+        stream.statusFlow.value = StreamStatus.Connected
+        advanceUntilIdle()
+        assertTrue(sessions.loadCalls > baseline)
+        assertEquals(StreamStatus.Connected, vm.uiState.value.streamStatus)
+    }
+
+    @Test
+    fun `resync adopts fresh history while preserving the in-flight live bubble`() = runTest {
+        val fresh = assistant("m1")
+        val (vm, sessions, stream) = build(history = listOf(fresh))
+        advanceUntilIdle()
+
+        // Agent starts answering → live bubble exists.
+        stream.push(StreamEvent.TextDelta("s1", "p1", "par"))
+        advanceUntilIdle()
+        assertEquals(2, vm.uiState.value.messages.size)
+
+        // Connection drops and recovers; meanwhile a *previous* turn landed.
+        val landed = assistant("m2")
+        sessions.history = listOf(fresh, landed)
+        stream.statusFlow.value = StreamStatus.Error("dropped")
+        advanceUntilIdle()
+        stream.statusFlow.value = StreamStatus.Connected
+        advanceUntilIdle()
+
+        val ids = vm.uiState.value.messages.map { it.id }
+        assertEquals(listOf("m1", "m2", MessageAssembler.liveMessageId("s1")), ids)
+        // No duplicated live content: the partial is still exactly one bubble.
+        assertEquals("par", (vm.uiState.value.messages.last().parts.single() as MessagePart.TextPart).content)
     }
 }
