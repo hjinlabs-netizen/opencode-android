@@ -7,6 +7,7 @@ import com.anomalyco.opencode.data.remote.dto.FileContentDto
 import com.anomalyco.opencode.data.remote.dto.FileDiffDto
 import com.anomalyco.opencode.data.remote.dto.FileNodeDto
 import com.anomalyco.opencode.data.remote.dto.MessageDto
+import com.anomalyco.opencode.data.remote.dto.MessageInfoDto
 import com.anomalyco.opencode.data.remote.dto.PermissionResponseRequest
 import com.anomalyco.opencode.data.remote.dto.ProviderListDto
 import com.anomalyco.opencode.data.remote.dto.QuestionReplyRequest
@@ -94,18 +95,29 @@ class OpenCodeApi @Inject constructor(
      * `POST /session/{id}/message` — send a prompt and return the created user
      * message envelope. Assistant output for this prompt arrives separately
      * over the event stream.
+     *
+     * The request itself is the side-effect that matters: this call resolves
+     * at end-of-turn and servers differ on the response shape (envelope,
+     * bare info, or nothing useful). A decode failure therefore must NOT be
+     * reported as a send failure (the UI would erase an accepted prompt), so
+     * unexpected bodies degrade to an empty envelope instead of throwing.
      */
     suspend fun sendPrompt(
         baseUrl: String,
         token: String,
         sessionId: String,
         request: SendMessageRequest,
-    ): MessageDto = authorizedPost(
-        baseUrl,
-        token,
-        "$SESSIONS_PATH/$sessionId/$MESSAGES_SUFFIX",
-        request,
-    ).body()
+    ): MessageDto {
+        val response = authorizedPost(
+            baseUrl,
+            token,
+            "$SESSIONS_PATH/$sessionId/$MESSAGES_SUFFIX",
+            request,
+        )
+        return runCatching { response.body<MessageDto>() }
+            .recoverCatching { MessageDto(info = response.body<MessageInfoDto>()) }
+            .getOrElse { MessageDto() }
+    }
 
     /**
      * `POST /permission/{requestId}` — resolve a pending permission request

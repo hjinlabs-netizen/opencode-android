@@ -20,6 +20,12 @@ interface EventTransport {
      * the collection must release all resources. It completes normally when
      * the server closes the stream and throws (IOException et al.) on any
      * transport failure.
+     *
+     * [onConnected] is invoked once as soon as the transport-level handshake
+     * succeeds (HTTP 200 / SSE stream accepted) — BEFORE any payload frame
+     * arrives — so the supervisor can report [com.anomalyco.opencode.domain.model.StreamStatus.Connected]
+     * immediately instead of waiting for the first data event (servers may
+     * keep a healthy stream quiet with comment-only keep-alives).
      */
-    fun frames(config: ServerConfig): Flow<String>
+    fun frames(config: ServerConfig, onConnected: () -> Unit = {}): Flow<String>
 }

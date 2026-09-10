@@ -95,21 +95,27 @@ class OpenCodeStreamClient @Inject constructor(
     /**
      * Keeps [transport] connected for [config] until the job is cancelled.
      * Every drop is followed by a [computeBackoffDelay] sleep; the attempt
-     * counter resets as soon as the stream delivers its first frame.
+     * counter resets as soon as the connection is proven (handshake or first
+     * frame), so a healthy-but-quiet stream never sits in Connecting/Error.
      */
     private suspend fun supervise(config: ServerConfig) {
         var attempt = 0
         while (currentCoroutineContext().isActive) {
             _status.value = StreamStatus.Connecting
             var healthy = false
+            // Idempotent per-connection promotion to Connected; also resets
+            // the backoff ladder so a recovered endpoint retries fast.
+            val markHealthy: () -> Unit = {
+                if (!healthy) {
+                    healthy = true
+                    attempt = 0
+                    _status.value = StreamStatus.Connected
+                }
+            }
             try {
-                transport.frames(config)
+                transport.frames(config, onConnected = markHealthy)
                     .onEach { raw ->
-                        if (!healthy) {
-                            healthy = true
-                            attempt = 0 // a working stream resets the backoff ladder
-                            _status.value = StreamStatus.Connected
-                        }
+                        markHealthy()
                         decoder.decodeAll(raw).forEach { event -> _events.emit(event) }
                     }
                     .collect()
@@ -124,7 +130,7 @@ class OpenCodeStreamClient @Inject constructor(
 
             // Compute the sleep for the *current* ladder rung first so the
             // very first failure waits the 1s base, then advance the ladder
-            // only for unhealthy drops. A healthy stream already reset it.
+            // only while unhealthy.
             val waitMillis = computeBackoffDelay(attempt, jitter())
             if (!healthy) attempt++
             delay(waitMillis)

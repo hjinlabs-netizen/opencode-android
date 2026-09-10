@@ -134,10 +134,18 @@ class ChatViewModel @Inject constructor(
                     _uiState.update { current ->
                         val live = current.messages
                             .firstOrNull { it.id == MessageAssembler.liveMessageId(sessionId) }
-                        current.copy(
-                            messages = history + listOfNotNull(live),
-                            isLoadingHistory = false,
-                        )
+                        val merged = history + listOfNotNull(live)
+                        when {
+                            // Resilience: a transient/EMPTY history during an
+                            // active turn or a reconnect resync must NEVER
+                            // blank (or partially erase) the visible
+                            // transcript. Keep what the user already sees
+                            // until real rows arrive.
+                            history.isEmpty() && current.messages.isNotEmpty() ->
+                                current.copy(isLoadingHistory = false)
+                            else ->
+                                current.copy(messages = merged, isLoadingHistory = false)
+                        }
                     }
                 }
                 .onFailure { error ->
@@ -248,8 +256,16 @@ class ChatViewModel @Inject constructor(
                 .onSuccess { serverMessage ->
                     _uiState.update { current ->
                         current.copy(
+                            // Swap in the server row only when it carries an
+                            // id; an unrecognised response shape keeps the
+                            // optimistic bubble visible (history refresh will
+                            // reconcile it later) instead of blanking it.
                             messages = current.messages.map {
-                                if (it.id == optimisticId) serverMessage else it
+                                if (it.id == optimisticId && serverMessage.id.isNotBlank()) {
+                                    serverMessage
+                                } else {
+                                    it
+                                }
                             },
                             isSending = false,
                         )
@@ -258,10 +274,13 @@ class ChatViewModel @Inject constructor(
                 .onFailure { error ->
                     _uiState.update { current ->
                         current.copy(
-                            // Roll the optimistic bubble back; nothing was sent.
-                            messages = current.messages.filterNot { it.id == optimisticId },
+                            // The user's message stays visible even when the
+                            // POST fails: OpenCode's send-message call resolves
+                            // at END OF TURN, so a late error/timeout almost
+                            // never means the prompt was rejected — wiping the
+                            // bubble blanks the whole transcript mid-stream.
+                            // The snackbar explains; a refresh reconciles.
                             isSending = false,
-                            isBusy = false,
                             error = error.message,
                         )
                     }

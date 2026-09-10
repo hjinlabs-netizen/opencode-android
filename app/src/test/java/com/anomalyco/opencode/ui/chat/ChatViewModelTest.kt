@@ -241,7 +241,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `send rolls back optimistic bubble on failure`() = runTest {
+    fun `failed send keeps the user message visible and surfaces the error`() = runTest {
         val (vm, sessions, _) = build()
         advanceUntilIdle()
         sessions.sendResult = { Result.failure(Exception("gönderilemedi")) }
@@ -254,9 +254,96 @@ class ChatViewModelTest {
 
         gate.complete(Unit)
         advanceUntilIdle()
-        assertTrue(vm.uiState.value.messages.isEmpty())
+
+        // The prompt often reached the server even when the (end-of-turn)
+        // response fails: never erase the user bubble.
+        assertEquals(1, vm.uiState.value.messages.size)
         assertEquals("gönderilemedi", vm.uiState.value.error)
-        assertFalse(vm.uiState.value.isBusy)
+        assertFalse(vm.uiState.value.isSending)
+    }
+
+    @Test
+    fun `user message stays visible through the entire streaming lifecycle`() = runTest {
+        val (vm, sessions, stream) = build()
+        advanceUntilIdle()
+        val gate = CompletableDeferred<Unit>()
+        sessions.sendGate = gate
+
+        vm.onInputChange("merhaba")
+        vm.send()
+
+        fun assertUserVisible(phase: String) {
+            assertTrue(
+                "$phase: transcript wiped: ${vm.uiState.value.messages}",
+                vm.uiState.value.messages.any { it.role == MessageRole.USER },
+            )
+        }
+
+        // 1. optimistic bubble pending sendPrompt resolution.
+        assertUserVisible("after send")
+
+        // 2. agent starts answering while the send call is still in flight.
+        stream.push(StreamEvent.TextDelta("s1", "p1", "Hel"))
+        stream.push(StreamEvent.StepStarted("s1", "st1", "thinking"))
+        advanceUntilIdle()
+        assertUserVisible("during deltas")
+        assertEquals(2, vm.uiState.value.messages.size) // user + live assistant
+
+        stream.push(StreamEvent.ToolCalled("s1", "c1", "read", "{}"))
+        advanceUntilIdle()
+        assertUserVisible("during tool call")
+
+        // 3. turn completes; live bubble merges in place, nothing is cleared.
+        stream.push(StreamEvent.SessionIdle("s1"))
+        advanceUntilIdle()
+        assertUserVisible("after idle")
+        assertTrue(vm.uiState.value.messages.isNotEmpty())
+
+        // 4. end-of-turn response resolves: message swapped, still present.
+        sessions.sendResult = {
+            Result.success(ChatMessage(id = "srv-1", sessionId = "s1", role = MessageRole.USER))
+        }
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertUserVisible("after send resolved")
+        assertTrue(vm.uiState.value.messages.any { it.id == "srv-1" })
+    }
+
+    @Test
+    fun `send response with blank server id keeps the optimistic bubble`() = runTest {
+        val (vm, sessions, _) = build()
+        advanceUntilIdle()
+        sessions.sendResult = {
+            // Unrecognised response shape degrades to an empty MessageDto.
+            Result.success(ChatMessage(id = "", sessionId = "s1", role = MessageRole.USER))
+        }
+        vm.onInputChange("hi")
+        vm.send()
+        advanceUntilIdle()
+
+        assertEquals(1, vm.uiState.value.messages.size)
+        assertTrue(vm.uiState.value.messages.single().id.startsWith("local-user-"))
+    }
+
+    @Test
+    fun `reconnect resync with empty history never blanks the transcript`() = runTest {
+        val (vm, sessions, stream) = build(history = listOf(assistant("m1")))
+        advanceUntilIdle()
+        assertEquals(1, vm.uiState.value.messages.size)
+
+        stream.push(StreamEvent.TextDelta("s1", "p1", "partial"))
+        advanceUntilIdle()
+        assertEquals(2, vm.uiState.value.messages.size)
+
+        // Mid-turn resync where the server momentarily reports no messages.
+        sessions.history = emptyList()
+        stream.statusFlow.value = StreamStatus.Error("drop")
+        advanceUntilIdle()
+        stream.statusFlow.value = StreamStatus.Connected
+        advanceUntilIdle()
+
+        val ids = vm.uiState.value.messages.map { it.id }
+        assertEquals(listOf("m1", MessageAssembler.liveMessageId("s1")), ids)
     }
 
     @Test

@@ -27,7 +27,10 @@ class SseEventTransport @Inject constructor(
     private val client: HttpClient,
 ) : EventTransport {
 
-    override fun frames(config: ServerConfig): Flow<String> = flow {
+    override fun frames(
+        config: ServerConfig,
+        onConnected: () -> Unit,
+    ): Flow<String> = flow {
         val session = client.sseSession {
             url(config.normalizedUrl + EVENT_PATH)
             header(HttpHeaders.Accept, "text/event-stream")
@@ -41,6 +44,11 @@ class SseEventTransport @Inject constructor(
                 socketTimeoutMillis = INFINITE_TIMEOUT
             }
         }
+        // `sseSession` returns once the server accepted the request with a
+        // 2xx response — the SSE handshake. Flip the supervisor to Connected
+        // now; waiting for the first data frame would misreport healthy but
+        // idle (comment keep-alive only) streams.
+        onConnected()
         try {
             session.incoming.collect { event ->
                 val data = event.data?.trim()

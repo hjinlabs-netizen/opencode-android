@@ -42,10 +42,11 @@ class OpenCodeStreamClientTest {
             private set
         val seenConfigs = mutableListOf<ServerConfig>()
 
-        override fun frames(config: ServerConfig): Flow<String> = flow {
+        override fun frames(config: ServerConfig, onConnected: () -> Unit): Flow<String> = flow {
             seenConfigs += config
             calls++
             if (calls <= failures) throw IOException("drop-$calls")
+            onConnected()
             emit(idleFrame())
             awaitCancellation()
         }
@@ -93,13 +94,19 @@ class OpenCodeStreamClientTest {
         val transport = object : EventTransport {
             var calls = 0
                 private set
-            override fun frames(config: ServerConfig): Flow<String> = flow {
+            override fun frames(config: ServerConfig, onConnected: () -> Unit): Flow<String> = flow {
                 calls++
                 when (calls) {
                     1 -> throw IOException("first drop")
-                    // emit one frame, then close normally
-                    2 -> emit("""{"type":"session.idle","properties":{"sessionID":"s"}}""")
-                    else -> awaitCancellation()
+                    // handshake, emit one frame, then the server closes normally
+                    2 -> {
+                        onConnected()
+                        emit("""{"type":"session.idle","properties":{"sessionID":"s"}}""")
+                    }
+                    else -> {
+                        onConnected()
+                        awaitCancellation()
+                    }
                 }
             }
         }
@@ -113,10 +120,10 @@ class OpenCodeStreamClientTest {
         runCurrent()
         assertEquals(2, transport.calls)
 
-        advanceTimeBy(1_000) // reset to base thanks to the healthy frame
+        advanceTimeBy(1_000) // reset to base thanks to the healthy handshake
         runCurrent()
         assertEquals(3, transport.calls)
-        assertEquals(StreamStatus.Connecting, client.status.value)
+        assertEquals(StreamStatus.Connected, client.status.value)
 
         client.stop()
     }
@@ -127,9 +134,10 @@ class OpenCodeStreamClientTest {
             var calls = 0
                 private set
             val seenConfigs = mutableListOf<ServerConfig>()
-            override fun frames(config: ServerConfig): Flow<String> = flow {
+            override fun frames(config: ServerConfig, onConnected: () -> Unit): Flow<String> = flow {
                 seenConfigs += config
                 calls++
+                onConnected()
                 emit("""{"type":"session.idle","properties":{"sessionID":"s"}}""")
                 awaitCancellation()
             }
@@ -163,6 +171,25 @@ class OpenCodeStreamClientTest {
         runCurrent()
         assertEquals(1, transport.calls)
         assertEquals(StreamStatus.Disconnected, client.status.value)
+    }
+
+    @Test
+    fun `handshake alone reaches Connected before any data frame arrives`() = runTest {
+        // Regression: healthy-but-quiet streams (comment-only keep-alives)
+        // must report CONNECTED, not stall in CONNECTING and flap to ERROR.
+        val transport = object : EventTransport {
+            override fun frames(config: ServerConfig, onConnected: () -> Unit): Flow<String> = flow {
+                onConnected()
+                awaitCancellation() // 200 accepted; zero payload frames ever
+            }
+        }
+        val client = clientFor(transport, backgroundScope)
+
+        client.start(config)
+        runCurrent()
+        assertEquals(StreamStatus.Connected, client.status.value)
+
+        client.stop()
     }
 
     @Test

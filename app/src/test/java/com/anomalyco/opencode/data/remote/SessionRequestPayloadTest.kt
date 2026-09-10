@@ -97,4 +97,27 @@ class SessionRequestPayloadTest {
         val config = json().decodeFromString(ConfigDto.serializer(), """{"model":null}""")
         assertNull(config.toSelection())
     }
+
+    @Test
+    fun `sendPrompt never fails on unexpected response shapes`() = runTest {
+        // An accepted prompt must not be reported as a send failure just
+        // because the server's end-of-turn response shape surprises us.
+        for (body in listOf("[]", "\"nope\"", """{"id":"m1","role":"user"}""", "not json")) {
+            val localCaptured = mutableListOf<HttpRequestData>()
+            val localApi = OpenCodeApi(
+                recordingClient(localCaptured) { MockResponse(body = body) },
+            )
+            val message = localApi.sendPrompt(
+                "http://srv:4096",
+                "",
+                "s1",
+                SendMessageRequest(parts = listOf(PartInputDto(text = "x"))),
+            )
+            assertEquals(
+                body,
+                "",
+                message.info.id, // degrades to an empty envelope at worst
+            )
+        }
+    }
 }
