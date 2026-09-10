@@ -134,6 +134,11 @@ class SettingsViewModel @Inject constructor(
                         )
                     }
                 }
+                // Diagnostics must not fail silently: an unreachable or
+                // broken catalog is surfaced so "bilinmiyor" has a reason.
+                .onFailure { error ->
+                    _uiState.update { it.copy(activeModel = null, error = error.message) }
+                }
         }
     }
 

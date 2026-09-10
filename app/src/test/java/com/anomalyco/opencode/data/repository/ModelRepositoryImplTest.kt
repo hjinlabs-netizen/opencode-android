@@ -41,12 +41,13 @@ class ModelRepositoryImplTest {
 
     private fun repository(
         configBody: MockResponse = MockResponse(body = """{"model":"anthropic/claude-y"}"""),
+        providerBody: String = providerJson,
     ) = ModelRepositoryImpl(
             OpenCodeApi(
                 recordingClient(captured) { request ->
                     when (request.url.encodedPath) {
                         "/config" -> configBody
-                        else -> MockResponse(body = providerJson)
+                        else -> MockResponse(body = providerBody)
                     }
                 },
             ),
@@ -107,5 +108,76 @@ class ModelRepositoryImplTest {
         val failure = result.exceptionOrNull()!!
         assertTrue(failure.message!!.contains("Kimlik doğrulama başarısız"))
         assertTrue(failure.cause is com.anomalyco.opencode.data.remote.OpenCodeHttpException)
+    }
+
+    // ---- map-shaped `models` (the live `/provider` payload format) ----------
+
+    @Test
+    fun `models served as an object keyed by model id parse into the catalog`() = runTest {
+        val body = """
+            {"all":[{"id":"p","name":"P","models":{"model-id":{"id":"model-id","name":"Model"}}}],"connected":[]}
+        """.trimIndent()
+        val providers = repository(
+            configBody = MockResponse(body = """{"model":"p/model-id"}"""),
+            providerBody = body,
+        ).fetchProviders().getOrThrow()
+
+        val model = providers.single().models.single()
+        assertEquals("model-id", model.modelId)
+        assertEquals("Model", model.displayName)
+        assertTrue(model.isCurrent)
+        assertEquals("p/model-id", model.qualifiedId)
+    }
+
+    @Test
+    fun `qualified map keys do not double-prefix the provider in ids or switches`() = runTest {
+        val body = """
+            {"all":[{"id":"subconscious","name":"Sub","models":{
+                "subconscious/glm-5.2":{"id":"subconscious/glm-5.2","name":"GLM 5.2"}
+            }}],"connected":["subconscious"]}
+        """.trimIndent()
+        val repo = repository(
+            configBody = MockResponse(body = """{"model":"subconscious/glm-5.2"}"""),
+            providerBody = body,
+        )
+        val providers = repo.fetchProviders().getOrThrow()
+
+        val model = providers.single().models.single()
+        assertEquals("glm-5.2", model.modelId)
+        assertEquals("subconscious/glm-5.2", model.qualifiedId)
+        assertTrue(model.isCurrent) // config value matches despite the raw key form
+
+        repo.setActiveModel(model.providerId, model.modelId)
+        val post = captured.single { it.method == HttpMethod.Post }
+        assertEquals("""{"model":"subconscious/glm-5.2"}""", post.postedJson())
+    }
+
+    @Test
+    fun `map entries without an id fall back to the object key`() = runTest {
+        val body = """
+            {"all":[{"id":"p","models":{"orphan-model":{}}}], "connected":[]}
+        """.trimIndent()
+        val providers = repository(providerBody = body).fetchProviders().getOrThrow()
+
+        val model = providers.single().models.single()
+        assertEquals("orphan-model", model.modelId)
+        // name/title missing → key doubles as the display fallback.
+        assertEquals("orphan-model", model.displayName)
+        assertNull(model.contextLength)
+    }
+
+    @Test
+    fun `individually broken model entries are skipped without losing the catalog`() = runTest {
+        val body = """
+            {"all":[{"id":"p","models":{
+                "m1":"not-an-object",
+                "m2":{"id":"m2","name":"Fine"}
+            }}],"connected":[]}
+        """.trimIndent()
+        val providers = repository(providerBody = body).fetchProviders().getOrThrow()
+
+        val models = providers.single().models
+        assertEquals(1, models.size)
+        assertEquals("m2", models.single().modelId)
     }
 }

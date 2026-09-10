@@ -114,7 +114,12 @@ class ChatViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            chatStreamRepository.events.collect { event -> onStreamEvent(event) }
+            chatStreamRepository.events.collect { event ->
+                // Defensive: a decoding/mapping bug in a single malformed event
+                // must never cancel this collector, or the transcript would
+                // silently freeze while the SSE connection reports Connected.
+                runCatching { onStreamEvent(event) }
+            }
         }
     }
 

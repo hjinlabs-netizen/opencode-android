@@ -3,12 +3,27 @@ package com.anomalyco.opencode.data.remote.dto
 import com.anomalyco.opencode.domain.model.ModelInfo
 import com.anomalyco.opencode.domain.model.ModelSelection
 import com.anomalyco.opencode.domain.model.ProviderConfig
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 
 /**
  * Tolerant wire model for the `/provider` response:
- * `{"all":[{id,name,models:[...]}], "connected":[ids], "default":{providerId:modelId}}`.
+ * `{"all":[{id,name,models:...}], "connected":[ids], "default":{providerId:modelId}}`.
+ *
+ * `models` is served either as a JSON array **or** — current OpenCode builds —
+ * as a JSON object keyed by model id (`{"glm-5.2": {"id": ...}}`, sometimes
+ * with the provider already in the key: `"subconscious/glm-5.2"`). Both
+ * shapes decode; see [FlexibleModelListSerializer].
  * Unknown keys (cost tables, env, options) are dropped by the shared `Json`.
  */
 @Serializable
@@ -27,20 +42,30 @@ data class ProviderListDto(
             providerId = providerId,
             displayName = provider.name ?: providerId,
             isConnected = providerId in connected || connected.isEmpty(),
-            models = provider.models.map { model ->
-                val modelId = model.id ?: model.modelId.orEmpty()
-                ModelInfo(
-                    providerId = providerId,
-                    modelId = modelId,
-                    displayName = model.name ?: model.title ?: modelId,
-                    description = model.description,
-                    contextLength = model.limit?.context,
-                    isCurrent = current != null &&
-                        current.providerId == providerId && current.modelId == modelId,
-                )
-            },
+            models = provider.models.map { model -> model.toInfo(providerId, current) },
         )
     }
+}
+
+/**
+ * Map-shaped catalogs can key entries with the qualified `provider/model`
+ * id; strip the known provider prefix so [ModelInfo.modelId] is the bare
+ * model id and `qualifiedId` never double-prefixes when POSTing `/config`.
+ * `isCurrent` matches either the raw or the normalized id.
+ */
+private fun ModelDto.toInfo(providerId: String, current: ModelSelection?): ModelInfo {
+    val rawId = (id ?: modelId).orEmpty()
+    val modelId = rawId.removePrefix("$providerId/")
+    return ModelInfo(
+        providerId = providerId,
+        modelId = modelId,
+        displayName = name ?: title ?: modelId,
+        description = description,
+        contextLength = limit?.context,
+        isCurrent = current != null &&
+            current.providerId == providerId &&
+            (current.modelId == modelId || current.modelId == rawId),
+    )
 }
 
 @Serializable
@@ -48,6 +73,7 @@ data class ProviderDto(
     val id: String? = null,
     @SerialName("providerID") val providerId: String? = null,
     val name: String? = null,
+    @Serializable(with = FlexibleModelListSerializer::class)
     val models: List<ModelDto> = emptyList(),
 )
 
@@ -66,6 +92,43 @@ data class ModelLimitDto(
     val context: Int? = null,
     val output: Int? = null,
 )
+
+/**
+ * Normalizes both historical wire shapes of a provider's model collection:
+ *  - `[{"id":"m1",...}, ...]` → decoded per element;
+ *  - `{"m1": {...}, "provider/m2": {...}}` → decoded per *value*, with the
+ *    object key as the fallback model id when the value omits one.
+ * Non-object entries and individually broken models are skipped rather than
+ * aborting the whole catalog (one bad model must not hide the rest).
+ */
+object FlexibleModelListSerializer : KSerializer<List<ModelDto>> {
+    private val delegate = ListSerializer(ModelDto.serializer())
+
+    override val descriptor: SerialDescriptor = delegate.descriptor
+
+    override fun deserialize(decoder: Decoder): List<ModelDto> {
+        val jsonDecoder = decoder as? JsonDecoder ?: return delegate.deserialize(decoder)
+        return when (val element: JsonElement = jsonDecoder.decodeJsonElement()) {
+            is JsonArray -> element.mapNotNull { item ->
+                runCatching {
+                    jsonDecoder.json.decodeFromJsonElement(ModelDto.serializer(), item)
+                }.getOrNull()
+            }
+            is JsonObject -> element.mapNotNull { (key, value) ->
+                runCatching {
+                    val model = jsonDecoder.json
+                        .decodeFromJsonElement(ModelDto.serializer(), value)
+                    if ((model.id ?: model.modelId).isNullOrBlank()) model.copy(id = key) else model
+                }.getOrNull()
+            }
+            else -> emptyList()
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: List<ModelDto>) {
+        encoder.encodeSerializableValue(delegate, value)
+    }
+}
 
 /** `GET /config` subset: the active model id, typically `"provider/model"`. */
 @Serializable
