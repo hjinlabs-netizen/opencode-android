@@ -3,11 +3,15 @@ package com.anomalyco.opencode.ui.chat
 import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.MessagePart
 import com.anomalyco.opencode.domain.model.MessageRole
+import com.anomalyco.opencode.domain.model.PermissionDecision
+import com.anomalyco.opencode.domain.model.PermissionRequest
+import com.anomalyco.opencode.domain.model.QuestionRequest
 import com.anomalyco.opencode.domain.model.Session
 import com.anomalyco.opencode.domain.model.SessionSummary
 import com.anomalyco.opencode.domain.model.StreamEvent
 import com.anomalyco.opencode.domain.model.StreamStatus
 import com.anomalyco.opencode.domain.repository.ChatStreamRepository
+import com.anomalyco.opencode.domain.repository.InteractionRepository
 import com.anomalyco.opencode.domain.repository.SessionRepository
 import com.anomalyco.opencode.util.MainDispatcherRule
 import androidx.lifecycle.SavedStateHandle
@@ -59,16 +63,53 @@ private class FakeStreamRepository : ChatStreamRepository {
     fun push(event: StreamEvent) { _events.tryEmit(event) }
 }
 
+/** Records interaction resolutions and lets tests drive their Result. */
+private class FakeInteractionRepository : InteractionRepository {
+    val permissions = mutableListOf<Pair<String, PermissionDecision>>()
+    val questions = mutableListOf<Pair<String, List<String>>>()
+    var permissionResult: Result<Unit> = Result.success(Unit)
+    var questionResult: Result<Unit> = Result.success(Unit)
+
+    override suspend fun respondPermission(requestId: String, decision: PermissionDecision): Result<Unit> {
+        permissions += requestId to decision
+        return permissionResult
+    }
+
+    override suspend fun respondQuestion(questionId: String, answers: List<String>): Result<Unit> {
+        questions += questionId to answers
+        return questionResult
+    }
+}
+
+/** All collaborators + the ViewModel built under test. */
+private class ChatHarness(
+    val viewModel: ChatViewModel,
+    val sessions: FakeSessionRepository,
+    val stream: FakeStreamRepository,
+    val interactions: FakeInteractionRepository,
+) {
+    operator fun component1() = viewModel
+    operator fun component2() = sessions
+    operator fun component3() = stream
+    operator fun component4() = interactions
+}
+
 class ChatViewModelTest {
 
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private fun build(history: List<ChatMessage> = emptyList()): Triple<ChatViewModel, FakeSessionRepository, FakeStreamRepository> {
+    private fun build(history: List<ChatMessage> = emptyList()): ChatHarness {
         val sessions = FakeSessionRepository().apply { this.history = history }
         val stream = FakeStreamRepository()
-        val vm = ChatViewModel(SavedStateHandle(mapOf("sessionId" to "s1")), sessions, stream)
-        return Triple(vm, sessions, stream)
+        val interactions = FakeInteractionRepository()
+        val vm = ChatViewModel(
+            SavedStateHandle(mapOf("sessionId" to "s1")),
+            sessions,
+            stream,
+            interactions,
+        )
+        return ChatHarness(vm, sessions, stream, interactions)
     }
 
     private fun assistant(id: String) = ChatMessage(
@@ -206,5 +247,129 @@ class ChatViewModelTest {
         val ids = vm.uiState.value.messages.map { it.id }
         assertFalse(MessageAssembler.liveMessageId("s1") in ids)
         assertTrue(ids.any { it.startsWith("assistant-s1-") })
+    }
+
+    // ---- interactive permission / question flows ---------------------------
+
+    private val permission = PermissionRequest(
+        requestId = "per-1",
+        sessionId = "s1",
+        type = "edit",
+        description = "Write file",
+        path = "src/Main.kt",
+    )
+
+    private val question = QuestionRequest(
+        questionId = "q-1",
+        sessionId = "s1",
+        text = "Which framework?",
+        options = listOf("Compose", "Views"),
+    )
+
+    @Test
+    fun `permission event queues an interaction without touching the transcript`() = runTest {
+        val (vm, _, stream) = build()
+        advanceUntilIdle()
+        stream.push(StreamEvent.PermissionAsked("s1", permission))
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(listOf(PendingInteraction.Permission(permission)), state.pendingInteractions)
+        assertTrue(state.interactionVisible)
+        assertTrue(state.isBusy)
+        assertTrue(state.messages.isEmpty()) // not merged into the message stream
+    }
+
+    @Test
+    fun `duplicate permission request for same id is ignored`() = runTest {
+        val (vm, _, stream) = build()
+        advanceUntilIdle()
+        stream.push(StreamEvent.PermissionAsked("s1", permission))
+        stream.push(StreamEvent.PermissionAsked("s1", permission.copy(description = "changed")))
+        advanceUntilIdle()
+        assertEquals(1, vm.uiState.value.pendingInteractions.size)
+    }
+
+    @Test
+    fun `answering permission removes it, reveals next queued interaction, and posts decision`() = runTest {
+        val (vm, _, stream, interactions) = build()
+        advanceUntilIdle()
+        stream.push(StreamEvent.PermissionAsked("s1", permission))
+        val second = permission.copy(requestId = "per-2")
+        stream.push(StreamEvent.PermissionAsked("s1", second))
+        advanceUntilIdle()
+
+        vm.respondToPermission("per-1", PermissionDecision.ALLOW)
+        advanceUntilIdle()
+
+        assertEquals(listOf("per-1" to PermissionDecision.ALLOW), interactions.permissions)
+        assertEquals(listOf(PendingInteraction.Permission(second)), vm.uiState.value.pendingInteractions)
+    }
+
+    @Test
+    fun `permission reply failure surfaces error but keeps transcript clean`() = runTest {
+        val (vm, _, stream, interactions) = build()
+        advanceUntilIdle()
+        interactions.permissionResult = Result.failure(Exception("sunucu reddetti"))
+        stream.push(StreamEvent.PermissionAsked("s1", permission))
+        advanceUntilIdle()
+
+        vm.respondToPermission("per-1", PermissionDecision.DENY)
+        advanceUntilIdle()
+
+        assertEquals("sunucu reddetti", vm.uiState.value.error)
+        assertTrue(vm.uiState.value.pendingInteractions.isEmpty())
+    }
+
+    @Test
+    fun `question answer forwards selected labels to repository`() = runTest {
+        val (vm, _, stream, interactions) = build()
+        advanceUntilIdle()
+        stream.push(StreamEvent.QuestionAsked("s1", question))
+        advanceUntilIdle()
+        assertEquals(PendingInteraction.Question(question), vm.uiState.value.pendingInteractions.single())
+
+        vm.respondToQuestion("q-1", listOf("Compose"))
+        advanceUntilIdle()
+
+        assertEquals(listOf("q-1" to listOf("Compose")), interactions.questions)
+        assertTrue(vm.uiState.value.pendingInteractions.isEmpty())
+    }
+
+    @Test
+    fun `session idle clears queued interactions`() = runTest {
+        val (vm, _, stream) = build()
+        advanceUntilIdle()
+        stream.push(StreamEvent.QuestionAsked("s1", question))
+        advanceUntilIdle()
+        assertEquals(1, vm.uiState.value.pendingInteractions.size)
+
+        stream.push(StreamEvent.SessionIdle("s1"))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.pendingInteractions.isEmpty())
+    }
+
+    @Test
+    fun `interactions from another session are ignored`() = runTest {
+        val (vm, _, stream) = build()
+        advanceUntilIdle()
+        stream.push(StreamEvent.PermissionAsked("other", permission.copy(sessionId = "other")))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.pendingInteractions.isEmpty())
+    }
+
+    @Test
+    fun `hiding then showing the interaction toggles visibility without answering`() = runTest {
+        val (vm, _, stream, interactions) = build()
+        advanceUntilIdle()
+        stream.push(StreamEvent.PermissionAsked("s1", permission))
+
+        vm.hideInteraction()
+        assertFalse(vm.uiState.value.interactionVisible)
+        assertEquals(1, vm.uiState.value.pendingInteractions.size)
+        assertTrue(interactions.permissions.isEmpty())
+
+        vm.showInteraction()
+        assertTrue(vm.uiState.value.interactionVisible)
     }
 }

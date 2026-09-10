@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.ui.chat
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +23,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Badge
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -104,6 +107,18 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    if (state.pendingInteractions.isNotEmpty() && !state.interactionVisible) {
+                        Badge(
+                            modifier = Modifier
+                                .padding(end = 4.dp)
+                                .clickable { viewModel.showInteraction() },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.NotificationsActive,
+                                contentDescription = "Bekleyen istekler",
+                            )
+                        }
+                    }
                     IconButton(onClick = viewModel::refresh) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Yenile")
                     }
@@ -129,6 +144,27 @@ fun ChatScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         )
+    }
+
+    // The agent is blocked on the front-most interaction until it is resolved.
+    val front = state.pendingInteractions.firstOrNull()
+    if (front != null && state.interactionVisible) {
+        when (front) {
+            is PendingInteraction.Permission -> PermissionDialog(
+                request = front.request,
+                onDecision = { decision ->
+                    viewModel.respondToPermission(front.request.requestId, decision)
+                },
+                onDismiss = viewModel::hideInteraction,
+            )
+            is PendingInteraction.Question -> QuestionDialog(
+                request = front.request,
+                onAnswer = { answers ->
+                    viewModel.respondToQuestion(front.request.questionId, answers)
+                },
+                onDismiss = viewModel::hideInteraction,
+            )
+        }
     }
 }
 

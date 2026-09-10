@@ -129,6 +129,8 @@ object MessageAssembler {
             // History refresh / diagnostics are ViewModel concerns.
             is StreamEvent.MessageUpdated,
             is StreamEvent.SessionError,
+            is StreamEvent.PermissionAsked,
+            is StreamEvent.QuestionAsked,
             is StreamEvent.Unknown,
             -> messages
         }

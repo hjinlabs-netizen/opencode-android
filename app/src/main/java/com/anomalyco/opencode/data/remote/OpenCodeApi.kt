@@ -2,6 +2,8 @@ package com.anomalyco.opencode.data.remote
 
 import com.anomalyco.opencode.data.remote.dto.CreateSessionRequest
 import com.anomalyco.opencode.data.remote.dto.MessageDto
+import com.anomalyco.opencode.data.remote.dto.PermissionResponseRequest
+import com.anomalyco.opencode.data.remote.dto.QuestionReplyRequest
 import com.anomalyco.opencode.data.remote.dto.SendMessageRequest
 import com.anomalyco.opencode.data.remote.dto.SessionDto
 import com.anomalyco.opencode.domain.model.HealthInfo
@@ -98,6 +100,38 @@ class OpenCodeApi @Inject constructor(
         request,
     ).body()
 
+    /**
+     * `POST /permission/{requestId}` — resolve a pending permission request
+     * with the server vocabulary ("once" | "always" | "reject").
+     */
+    suspend fun respondPermission(
+        baseUrl: String,
+        token: String,
+        requestId: String,
+        request: PermissionResponseRequest,
+    ): Unit = authorizedPost(
+        baseUrl,
+        token,
+        "$PERMISSIONS_PATH/$requestId",
+        request,
+    ).let { }
+
+    /**
+     * `POST /question/{questionId}/reply` — answer a pending question.
+     * [QuestionReplyRequest.answers] is one list of labels per question.
+     */
+    suspend fun respondQuestion(
+        baseUrl: String,
+        token: String,
+        questionId: String,
+        request: QuestionReplyRequest,
+    ): Unit = authorizedPost(
+        baseUrl,
+        token,
+        "$QUESTIONS_PATH/$questionId/reply",
+        request,
+    ).let { }
+
     // ---- shared request/auth helpers ----
 
     private suspend fun authorizedGet(
@@ -137,6 +171,8 @@ class OpenCodeApi @Inject constructor(
         const val HEALTH_PATH = "/global/health"
         const val SESSIONS_PATH = "/session"
         const val MESSAGES_SUFFIX = "message"
+        const val PERMISSIONS_PATH = "/permission"
+        const val QUESTIONS_PATH = "/question"
     }
 }
 

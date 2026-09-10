@@ -6,9 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.MessagePart
 import com.anomalyco.opencode.domain.model.MessageRole
+import com.anomalyco.opencode.domain.model.PermissionDecision
+import com.anomalyco.opencode.domain.model.PermissionRequest
+import com.anomalyco.opencode.domain.model.QuestionRequest
 import com.anomalyco.opencode.domain.model.StreamEvent
 import com.anomalyco.opencode.domain.model.StreamStatus
 import com.anomalyco.opencode.domain.repository.ChatStreamRepository
+import com.anomalyco.opencode.domain.repository.InteractionRepository
 import com.anomalyco.opencode.domain.repository.SessionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +34,19 @@ enum class AgentMode(val wireName: String) {
     }
 }
 
+/** A server-initiated user interaction awaiting a response, ready for the UI. */
+sealed interface PendingInteraction {
+    val id: String
+
+    data class Permission(val request: PermissionRequest) : PendingInteraction {
+        override val id: String get() = request.requestId
+    }
+
+    data class Question(val request: QuestionRequest) : PendingInteraction {
+        override val id: String get() = request.questionId
+    }
+}
+
 /** Immutable render state for [ChatScreen]. */
 data class ChatUiState(
     val sessionId: String = "",
@@ -43,6 +60,10 @@ data class ChatUiState(
     /** The server is actively producing output (stream events pending idle). */
     val isBusy: Boolean = false,
     val streamStatus: StreamStatus = StreamStatus.Disconnected,
+    /** Permissions/questions blocking the agent, oldest first. */
+    val pendingInteractions: List<PendingInteraction> = emptyList(),
+    /** Whether the front-most interaction is shown as a dialog. */
+    val interactionVisible: Boolean = true,
     val error: String? = null,
 )
 
@@ -56,6 +77,7 @@ class ChatViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val sessionRepository: SessionRepository,
     private val chatStreamRepository: ChatStreamRepository,
+    private val interactionRepository: InteractionRepository,
 ) : ViewModel() {
 
     private val sessionId: String = savedStateHandle[ARG_SESSION_ID] ?: ""
@@ -165,17 +187,70 @@ class ChatViewModel @Inject constructor(
         // SessionError may be global (null id) or addressed to this session.
         if (target.isNotEmpty() && target != sessionId) return
 
+        // New permission/question requests join the pending queue (deduped by
+        // id) and pop open the front-most one.
+        val incoming = when (event) {
+            is StreamEvent.PermissionAsked ->
+                if (_uiState.value.pendingInteractions.any { it.id == event.request.requestId }) {
+                    null
+                } else {
+                    PendingInteraction.Permission(event.request)
+                }
+            is StreamEvent.QuestionAsked ->
+                if (_uiState.value.pendingInteractions.any { it.id == event.request.questionId }) {
+                    null
+                } else {
+                    PendingInteraction.Question(event.request)
+                }
+            else -> null
+        }
+
         _uiState.update { current ->
+            val settled = event is StreamEvent.SessionIdle
             current.copy(
                 messages = MessageAssembler.apply(current.messages, sessionId, event),
                 isBusy = when (event) {
                     is StreamEvent.SessionIdle, is StreamEvent.SessionError -> false
                     else -> true
                 },
+                pendingInteractions = when {
+                    settled -> emptyList()
+                    incoming != null -> current.pendingInteractions + incoming
+                    else -> current.pendingInteractions
+                },
+                interactionVisible = if (incoming != null) true else current.interactionVisible,
                 error = (event as? StreamEvent.SessionError)?.message ?: current.error,
             )
         }
     }
+
+    /** Resolve a permission prompt; the card clears optimistically and the next queued one surfaces. */
+    fun respondToPermission(requestId: String, decision: PermissionDecision) {
+        _uiState.update { current ->
+            current.copy(pendingInteractions = current.pendingInteractions.filterNot { it.id == requestId })
+        }
+        viewModelScope.launch {
+            interactionRepository.respondPermission(requestId, decision)
+                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+        }
+    }
+
+    /** Answer a question with the selected/free-text labels. */
+    fun respondToQuestion(questionId: String, answers: List<String>) {
+        _uiState.update { current ->
+            current.copy(pendingInteractions = current.pendingInteractions.filterNot { it.id == questionId })
+        }
+        viewModelScope.launch {
+            interactionRepository.respondQuestion(questionId, answers)
+                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+        }
+    }
+
+    /** Dismiss the current interaction dialog without answering (it stays queued). */
+    fun hideInteraction() = _uiState.update { it.copy(interactionVisible = false) }
+
+    /** Re-show the queued interaction dialog (badge on the top bar). */
+    fun showInteraction() = _uiState.update { it.copy(interactionVisible = true) }
 
     /** Session id carried by an event, or null for events we ignore entirely. */
     private fun sessionIdOf(event: StreamEvent): String? = when (event) {
@@ -189,6 +264,8 @@ class ChatViewModel @Inject constructor(
         is StreamEvent.MessageUpdated -> event.sessionId
         is StreamEvent.SessionIdle -> event.sessionId
         is StreamEvent.SessionError -> event.sessionId ?: ""
+        is StreamEvent.PermissionAsked -> event.sessionId
+        is StreamEvent.QuestionAsked -> event.sessionId
         is StreamEvent.Unknown -> null
     }
 

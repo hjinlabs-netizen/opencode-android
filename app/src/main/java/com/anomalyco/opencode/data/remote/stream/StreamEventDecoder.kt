@@ -1,6 +1,8 @@
 package com.anomalyco.opencode.data.remote.stream
 
 import com.anomalyco.opencode.data.remote.dto.EventEnvelopeDto
+import com.anomalyco.opencode.domain.model.PermissionRequest
+import com.anomalyco.opencode.domain.model.QuestionRequest
 import com.anomalyco.opencode.domain.model.StreamEvent
 import com.anomalyco.opencode.domain.model.ToolStatus
 import kotlinx.serialization.json.Json
@@ -8,6 +10,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -100,6 +103,12 @@ class StreamEventDecoder @Inject constructor(
                 message = p.str("message", "error").ifEmpty { "Session error" },
             )
 
+        "permission.asked", "session.next.permission.asked" ->
+            StreamEvent.PermissionAsked(p.sessionId(), p.toPermissionRequest())
+
+        "question.asked", "session.next.question.asked" ->
+            StreamEvent.QuestionAsked(p.sessionId(), p.toQuestionRequest())
+
         else -> StreamEvent.Unknown(type)
     }
 }
@@ -160,4 +169,69 @@ private fun JsonObject.args(): String {
         }
     }
     return "{}"
+}
+
+// ---- interactive (permission / question) payload parsers --------------------
+
+/**
+ * `permission.asked` shapes vary: flat fields, or nested under `metadata`
+ * with affected files in `patterns[]`. Everything is optional.
+ */
+private fun JsonObject.toPermissionRequest(): PermissionRequest {
+    val metadata = this["metadata"]?.jsonObject
+    val patterns = (this["patterns"] as? JsonArray)?.firstStringOrNull()
+    return PermissionRequest(
+        requestId = str("id", "requestID", "permissionID"),
+        sessionId = sessionId(),
+        type = str("permission", "operation", "kind"),
+        description = str("description", "title", "message"),
+        path = metadata?.direct("filepath")
+            ?: metadata?.direct("filePath")
+            ?: direct("path")
+            ?: direct("filepath")
+            ?: patterns,
+        command = metadata?.direct("command") ?: direct("command"),
+        diff = metadata?.direct("diff") ?: direct("diff"),
+    )
+}
+
+/**
+ * `question.asked` may carry a single flat question or a `questions[]` list;
+ * the first question is surfaced (multi-question turns are rare and still
+ * resolvable through the CLI). Options accept both plain strings and
+ * `{label, description}` objects.
+ */
+private fun JsonObject.toQuestionRequest(): QuestionRequest {
+    val first = (this["questions"] as? JsonArray)
+        ?.filterIsInstance<JsonObject>()
+        ?.firstOrNull()
+    val source = first ?: this
+    val options = source.stringList("options").ifEmpty { source.stringList("choices") }
+    return QuestionRequest(
+        questionId = str("id", "requestID", "questionID"),
+        sessionId = sessionId(),
+        text = source.str("question", "text", "header"),
+        options = options,
+        allowCustomAnswer = source["custom"]?.jsonPrimitive?.booleanOrNull
+            ?: source["allowCustom"]?.jsonPrimitive?.booleanOrNull
+            ?: true,
+        multiple = source["multiple"]?.jsonPrimitive?.booleanOrNull ?: false,
+    )
+}
+
+private fun JsonObject.direct(key: String): String? =
+    this[key]?.jsonPrimitive?.contentOrNull
+
+private fun JsonArray.firstStringOrNull(): String? =
+    (firstOrNull() as? JsonPrimitive)?.contentOrNull
+
+private fun JsonObject.stringList(key: String): List<String> {
+    val array = this[key] as? JsonArray ?: return emptyList()
+    return array.mapNotNull { element ->
+        when (element) {
+            is JsonPrimitive -> element.contentOrNull
+            is JsonObject -> element.direct("label") ?: element.direct("value") ?: element.direct("text")
+            else -> null
+        }
+    }
 }

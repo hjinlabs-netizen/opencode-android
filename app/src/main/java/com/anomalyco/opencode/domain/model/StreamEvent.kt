@@ -79,6 +79,12 @@ sealed interface StreamEvent {
         val message: String,
     ) : StreamEvent
 
+    /** The agent asks permission for a sensitive operation; blocks until answered. */
+    data class PermissionAsked(val sessionId: String, val request: PermissionRequest) : StreamEvent
+
+    /** The agent asks a free-form/multiple-choice question; blocks until answered. */
+    data class QuestionAsked(val sessionId: String, val request: QuestionRequest) : StreamEvent
+
     /** Fallback for event types this client build does not model. */
     data class Unknown(val type: String) : StreamEvent
 }

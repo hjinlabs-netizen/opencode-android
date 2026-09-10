@@ -108,12 +108,20 @@ class MessageAssemblerTest {
     }
 
     @Test
-    fun `message updates, errors and unknown events are not merged into the transcript`() {
+    fun `message updates, errors, interactions and unknown events are not merged into the transcript`() {
         val messages = listOf(prior)
         listOf(
             StreamEvent.MessageUpdated(session, "m9"),
             StreamEvent.SessionError(session, "boom"),
             StreamEvent.Unknown("session.next.brand.thing"),
+            StreamEvent.PermissionAsked(
+                session,
+                com.anomalyco.opencode.domain.model.PermissionRequest(requestId = "p1"),
+            ),
+            StreamEvent.QuestionAsked(
+                session,
+                com.anomalyco.opencode.domain.model.QuestionRequest(questionId = "q1"),
+            ),
         ).forEach { event ->
             assertEquals(messages, MessageAssembler.apply(messages, session, event))
         }
