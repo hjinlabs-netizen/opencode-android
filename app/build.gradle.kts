@@ -92,4 +92,9 @@ dependencies {
 
     // Secure storage
     implementation(libs.androidx.security.crypto)
+
+    // Unit tests
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
 }

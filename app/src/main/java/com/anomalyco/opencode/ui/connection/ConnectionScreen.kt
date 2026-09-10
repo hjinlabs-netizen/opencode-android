@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Sync
@@ -29,7 +30,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,9 +55,26 @@ import com.anomalyco.opencode.domain.model.ConnectionState
  */
 @Composable
 fun ConnectionScreen(
+    onOpenSessions: () -> Unit = {},
     viewModel: ConnectionViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Advance to the session list when a probe (manual or auto-resume) succeeds.
+    // Seeding with the current state prevents a bounce when the user returns
+    // to an already-connected screen via back navigation.
+    var wasConnected by remember {
+        mutableStateOf(uiState.connection is ConnectionState.Connected)
+    }
+    LaunchedEffect(uiState.connection) {
+        val connected = uiState.connection is ConnectionState.Connected
+        if (connected && !wasConnected) {
+            wasConnected = true
+            onOpenSessions()
+        } else if (!connected) {
+            wasConnected = false
+        }
+    }
 
     ConnectionScreenContent(
         state = uiState,
@@ -60,6 +82,7 @@ fun ConnectionScreen(
         onTokenChange = viewModel::onTokenChange,
         onTestAndSave = viewModel::testAndSave,
         onDisconnect = viewModel::disconnect,
+        onOpenSessions = onOpenSessions,
     )
 }
 
@@ -70,6 +93,7 @@ fun ConnectionScreenContent(
     onTokenChange: (String) -> Unit,
     onTestAndSave: () -> Unit,
     onDisconnect: () -> Unit,
+    onOpenSessions: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -157,6 +181,15 @@ fun ConnectionScreenContent(
         }
 
         if (state.connection is ConnectionState.Connected) {
+            Button(
+                onClick = onOpenSessions,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Oturumlara Geç")
+            }
             OutlinedButton(
                 onClick = onDisconnect,
                 modifier = Modifier.fillMaxWidth(),

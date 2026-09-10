@@ -42,6 +42,9 @@ class ConnectionViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ConnectionUiState())
     val uiState: StateFlow<ConnectionUiState> = _uiState.asStateFlow()
 
+    /** Ensures the saved-config auto-probe runs at most once per VM lifetime. */
+    private var probedSavedConfig = false
+
     /** Whether the user persisted any config ever (used for save-button label). */
     val hasSavedConfig: StateFlow<Boolean> =
         repository.config
@@ -59,6 +62,12 @@ class ConnectionViewModel @Inject constructor(
                             token = saved.token,
                             loaded = true,
                         )
+                    }
+                    // App resumed with a persisted server: silently re-probe
+                    // once so the stream (and navigation) resumes automatically.
+                    if (!probedSavedConfig && _uiState.value.connection is ConnectionState.Disconnected) {
+                        probedSavedConfig = true
+                        connectionManager.connect(saved)
                     }
                 } else if (!_uiState.value.loaded) {
                     _uiState.update { it.copy(loaded = true) }

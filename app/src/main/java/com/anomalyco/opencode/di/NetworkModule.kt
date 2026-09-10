@@ -10,6 +10,7 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
+import io.ktor.client.plugins.sse.SSE
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import java.util.concurrent.TimeUnit
@@ -41,6 +42,7 @@ object NetworkModule {
     fun provideHttpClient(json: Json): HttpClient = HttpClient(OkHttp) {
         expectSuccess = false // We handle status codes ourselves in OpenCodeApi.
         install(ContentNegotiation) { json(json) }
+        install(SSE) // Enables `client.sseSession { ... }` for the event stream.
         install(HttpTimeout) {
             // The base client carries server-wide defaults; per-request
             // overrides are still possible via HttpRequestBuilder.timeout.
@@ -55,7 +57,10 @@ object NetworkModule {
         engine {
             config {
                 connectTimeout(5, TimeUnit.SECONDS)
-                readTimeout(30, TimeUnit.SECONDS)
+                // Long-lived SSE connections rely on server keep-alives;
+                // event-stream requests additionally opt out of the timeout
+                // plugin via per-request `timeout { ... }` overrides.
+                readTimeout(90, TimeUnit.SECONDS)
                 retryOnConnectionFailure(true)
             }
         }

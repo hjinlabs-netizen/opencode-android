@@ -40,6 +40,10 @@ class SecureSettingsStore @Inject constructor(
     private val _config = MutableStateFlow<ServerConfig?>(null)
     val config: Flow<ServerConfig?> = _config.asStateFlow()
 
+    /** Synchronous snapshot of the cached config (null during the very first load). */
+    val current: ServerConfig?
+        get() = _config.value
+
     /** Encrypted prefs creation is expensive (Keystore) so it is lazy and off-main. */
     private val prefs: SharedPreferences by lazy {
         val masterKey = MasterKey.Builder(context)
