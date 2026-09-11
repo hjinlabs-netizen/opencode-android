@@ -29,6 +29,12 @@
 > **Sprint C status:** turn controls ✅ (abort `POST /session/{id}/abort` + retry) ·
 > endpoint probe caching ✅ (P2-2, per `baseUrl|operation`, invalidated on config change) ·
 > code-block copy + language badge ✅.
+> **Hotfix (post-C):** ✅ abort deadlock resolved (`sendPrompt`/`abortSession`/`loadMessages`
+> freed from `cacheMutex`) + instant client-side release (`sendJob?.cancel()`, synchronous
+> `isBusy`/`isSending` settle, background abort POST) · ✅ model selection persisted
+> (`PreferenceStore` keys `last_selected_provider_id`/`last_selected_model_id`, cold-start
+> seed + automatic `/config` reconcile without opening the picker). Covered by the strict
+> synchronous-abort VM test, the cold-start persistence test, and the abort wire test.
 > **Still open:** P0-6 (instrumentation/SSE device tests) · §5 CI + lint.
 
 1. **[RESOLVED] Server-resolution inconsistency (cold-start race).**
@@ -135,9 +141,13 @@
 - **Session export/import**: share transcript as Markdown/JSON, import as a new session context.
 - **Agent permissions workflow**: persistent rule editor ("allow edit under `src/**`"), permission
   profiles per workspace, audit log of granted/denied decisions.
-- **Turn controls**: ✅ abort running turn (`POST /session/{id}/abort`) and retry
-  last prompt shipped in Sprint C. Remaining: per-message copy, regenerate,
-  token/cost meter from `step-finish` data.
+- **Turn controls**: ✅ FULLY RESOLVED — abort running turn (`POST /session/{id}/abort`) and
+  retry last prompt shipped in Sprint C; the cacheMutex deadlock and instant-release
+  semantics were fixed and are covered by dedicated tests. Remaining: per-message copy,
+  regenerate, token/cost meter from `step-finish` data.
+- **Model selection persistence**: ✅ FULLY RESOLVED — the active choice is mirrored to
+  `PreferenceStore`, the chat top-bar chip is seeded from it on cold start, and the catalog
+  load automatically reconciles/re-applies it to `/config` without opening the picker.
 - **Workspaces UX**: directory picker over `/find` browsing (instead of typed path), pinned
   favorites, per-directory model defaults.
 - **Notifications**: long-turn completion notification (WorkManager poll or push relay) when the

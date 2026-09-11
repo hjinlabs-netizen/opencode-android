@@ -129,6 +129,10 @@ class ChatViewModel @Inject constructor(
                     ),
                 )
             }
+            // Auto-reconcile: pull the catalog in the background so the
+            // persisted choice is validated and re-applied to `/config`
+            // without the user having to open the picker sheet first.
+            loadProviders()
         }
         refresh()
         viewModelScope.launch {

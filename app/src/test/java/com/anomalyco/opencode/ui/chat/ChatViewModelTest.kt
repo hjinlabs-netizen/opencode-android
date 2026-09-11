@@ -4,6 +4,7 @@ import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.MessagePart
 import com.anomalyco.opencode.domain.model.MessageRole
 import com.anomalyco.opencode.domain.model.ModelInfo
+import com.anomalyco.opencode.domain.model.ModelSelection
 import com.anomalyco.opencode.domain.model.PermissionDecision
 import com.anomalyco.opencode.domain.model.PermissionRequest
 import com.anomalyco.opencode.domain.model.ProviderConfig
@@ -66,7 +67,12 @@ private class FakeSessionRepository : SessionRepository {
 
     val aborted = mutableListOf<String>()
     var abortResult: Result<Unit> = Result.success(Unit)
+
+    /** When set, abortSession suspends until this gate completes (tests instant UI release). */
+    var abortGate: CompletableDeferred<Unit>? = null
+
     override suspend fun abortSession(sessionId: String): Result<Unit> {
+        abortGate?.await()
         aborted += sessionId
         return abortResult
     }
@@ -665,6 +671,44 @@ class ChatViewModelTest {
         assertNull(vm.uiState.value.currentModel)
     }
 
+    @Test
+    fun `cold start seeds the persisted model and auto-reconciles it with the server`() = runTest {
+        val models = FakeModelRepository().apply {
+            preferred = ModelSelection("anthropic", "claude-3-5-sonnet")
+            providersResult = Result.success(
+                listOf(
+                    ProviderConfig(
+                        providerId = "anthropic",
+                        displayName = "Anthropic",
+                        models = listOf(
+                            ModelInfo("anthropic", "claude-3-5-sonnet", "Claude 3.5 Sonnet"),
+                            ModelInfo("anthropic", "claude-a", "Claude A"),
+                        ),
+                    ),
+                ),
+            )
+        }
+        val vm = ChatViewModel(
+            SavedStateHandle(mapOf("sessionId" to "s1")),
+            FakeSessionRepository(),
+            FakeStreamRepository(),
+            FakeInteractionRepository(),
+            models,
+        )
+
+        // Seeded immediately on init — the chip is never blank after a restart.
+        assertEquals("claude-3-5-sonnet", vm.uiState.value.currentModel?.modelId)
+
+        advanceUntilIdle()
+        // Background loadProviders() reconciled the choice with `/config`
+        // without anyone opening the picker sheet.
+        assertEquals(1, models.fetchCalls)
+        assertEquals(listOf("anthropic" to "claude-3-5-sonnet"), models.setCalls)
+        assertEquals("claude-3-5-sonnet", vm.uiState.value.currentModel?.modelId)
+        assertEquals("Claude 3.5 Sonnet", vm.uiState.value.currentModel?.displayName)
+        assertTrue(vm.uiState.value.currentModel!!.isCurrent)
+    }
+
     // ---- Phase 4 resilience -------------------------------------------------
 
     @Test
@@ -833,6 +877,32 @@ class ChatViewModelTest {
         assertEquals(listOf("s1"), sessions.aborted)
         assertFalse(vm.uiState.value.isBusy)
         assertFalse(vm.uiState.value.isSending)
+    }
+
+    @Test
+    fun `abort settles busy synchronously while the abort post is still in flight`() = runTest {
+        val (vm, sessions, stream) = build()
+        advanceUntilIdle()
+        sessions.sendGate = CompletableDeferred() // long poll never resolves
+        vm.onInputChange("dur")
+        vm.send()
+        stream.push(StreamEvent.TextDelta("s1", "p1", "c"))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.isBusy)
+
+        sessions.abortGate = CompletableDeferred() // server abort call hangs
+        vm.abort()
+
+        // No dispatcher advancement, no completed network I/O: the release
+        // must already be visible to the UI (the reported bug's core fix).
+        assertFalse(vm.uiState.value.isBusy)
+        assertFalse(vm.uiState.value.isSending)
+        assertTrue(sessions.aborted.isEmpty())
+
+        sessions.abortGate?.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf("s1"), sessions.aborted)
+        assertFalse(vm.uiState.value.isBusy)
     }
 
     @Test

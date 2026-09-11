@@ -150,6 +150,27 @@ class SessionRepositoryImplTest {
     }
 
     @Test
+    fun `abortSession posts an empty object to the session abort endpoint`() = runTest {
+        val repo = repository { MockResponse() }
+
+        assertTrue(repo.abortSession("ses_123").isSuccess)
+
+        val request = captured.single()
+        assertEquals(HttpMethod.Post, request.method)
+        assertEquals("/session/ses_123/abort", request.url.encodedPath)
+        assertEquals("{}", request.postedJson())
+        assertEquals("Bearer tok", request.headers[io.ktor.http.HttpHeaders.Authorization])
+    }
+
+    @Test
+    fun `abort failure maps to the friendly error`() = runTest {
+        val repo = repository { MockResponse(status = HttpStatusCode.InternalServerError) }
+
+        val result = repo.abortSession("ses_123")
+        assertTrue(result.isFailure)
+    }
+
+    @Test
     fun `getSession caches the row for list observers`() = runTest {
         val repo = repository { MockResponse(body = sessionJson) }
         val session = repo.getSession("s1").getOrThrow()
