@@ -9,6 +9,7 @@ import com.anomalyco.opencode.di.NetworkModule
 import com.anomalyco.opencode.util.MockResponse
 import com.anomalyco.opencode.util.postedJson
 import com.anomalyco.opencode.util.recordingClient
+import com.anomalyco.opencode.util.testJson
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
@@ -35,6 +36,7 @@ class SessionRequestPayloadTest {
 
     private val api = OpenCodeApi(
         recordingClient(captured) { MockResponse(body = """{"id":"s-new","title":""}""") },
+        testJson(),
     )
 
     private fun json() = NetworkModule.opencodeJson()
@@ -108,6 +110,7 @@ class SessionRequestPayloadTest {
             val localCaptured = mutableListOf<HttpRequestData>()
             val localApi = OpenCodeApi(
                 recordingClient(localCaptured) { MockResponse(body = body) },
+                testJson(),
             )
             val message = localApi.sendPrompt(
                 "http://srv:4096",

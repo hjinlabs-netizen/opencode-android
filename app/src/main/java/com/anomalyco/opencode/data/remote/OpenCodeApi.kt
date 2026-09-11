@@ -3,9 +3,6 @@ package com.anomalyco.opencode.data.remote
 import com.anomalyco.opencode.data.remote.dto.ConfigDto
 import com.anomalyco.opencode.data.remote.dto.ConfigPatchDto
 import com.anomalyco.opencode.data.remote.dto.CreateSessionRequest
-import com.anomalyco.opencode.data.remote.dto.FileContentDto
-import com.anomalyco.opencode.data.remote.dto.FileDiffDto
-import com.anomalyco.opencode.data.remote.dto.FileNodeDto
 import com.anomalyco.opencode.data.remote.dto.MessageDto
 import com.anomalyco.opencode.data.remote.dto.MessageInfoDto
 import com.anomalyco.opencode.data.remote.dto.PermissionResponseRequest
@@ -29,6 +26,9 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -41,11 +41,13 @@ import javax.inject.Singleton
  * server config), so this class stays stateless and trivially testable.
  *
  * JSON encoding/decoding is delegated to the `ContentNegotiation` feature
- * configured with the shared lenient [kotlinx.serialization.json.Json].
+ * configured with the shared lenient [kotlinx.serialization.json.Json];
+ * [getJson] additionally guards against non-JSON bodies (SPA fallbacks).
  */
 @Singleton
 class OpenCodeApi @Inject constructor(
     private val client: HttpClient,
+    private val json: Json,
 ) {
 
     /**
@@ -159,19 +161,33 @@ class OpenCodeApi @Inject constructor(
 
     // ---- filesystem & model catalog (Phase 3) ----
 
-    /** `GET /fs/list?path=` — one level of the project directory listing. */
-    suspend fun listFiles(baseUrl: String, token: String, path: String): List<FileNodeDto> =
-        authorizedGet(baseUrl, token, FS_LIST_PATH) { parameter("path", path) }.body()
-
-    /** `GET /fs/read?path=` — UTF-8 contents of a single file. */
-    suspend fun readFile(baseUrl: String, token: String, path: String): FileContentDto =
-        authorizedGet(baseUrl, token, FS_READ_PATH) { parameter("path", path) }.body()
-
-    /** `GET /fs/diff[?path=]` — working-tree diff rows (raw patch text). */
-    suspend fun diffFiles(baseUrl: String, token: String, path: String?): List<FileDiffDto> =
-        authorizedGet(baseUrl, token, FS_DIFF_PATH) {
-            if (!path.isNullOrEmpty()) parameter("path", path)
-        }.body()
+    /**
+     * Generic authenticated GET returning the parsed JSON tree. Used by the
+     * file/diff endpoints whose PATHS differ across server builds — the
+     * repository probes candidates and decodes shapes, so the API stays
+     * endpoint-agnostic.
+     *
+     * A 200 whose `Content-Type` is not JSON (e.g. the SPA `index.html`
+     * fallback OpenCode serves for unknown routes) throws
+     * [UnsupportedResponseException] instead of letting ContentNegotiation
+     * blow up with `NoTransformationFoundException`.
+     */
+    suspend fun getJson(
+        baseUrl: String,
+        token: String,
+        path: String,
+        query: Map<String, String> = emptyMap(),
+    ): JsonElement {
+        val response = authorizedGet(baseUrl, token, path) {
+            query.forEach { (key, value) -> parameter(key, value) }
+        }
+        val contentType = response.contentType()
+        if (contentType != null && !contentType.withoutParameters().match(ContentType.Application.Json)) {
+            throw UnsupportedResponseException(path, contentType.toString())
+        }
+        val text = response.bodyAsText().trim()
+        return if (text.isEmpty()) JsonNull else json.parseToJsonElement(text)
+    }
 
     /** `GET /provider` — catalog of supported providers/models. */
     suspend fun getProviders(baseUrl: String, token: String): ProviderListDto =
@@ -237,9 +253,6 @@ class OpenCodeApi @Inject constructor(
         const val MESSAGES_SUFFIX = "message"
         const val PERMISSIONS_PATH = "/permission"
         const val QUESTIONS_PATH = "/question"
-        const val FS_LIST_PATH = "/fs/list"
-        const val FS_READ_PATH = "/fs/read"
-        const val FS_DIFF_PATH = "/fs/diff"
         const val PROVIDER_PATH = "/provider"
         const val CONFIG_PATH = "/config"
     }
@@ -250,3 +263,14 @@ class OpenCodeHttpException(
     val code: Int,
     val bodyText: String,
 ) : Exception("OpenCode server returned HTTP $code")
+
+/**
+ * Raised when a 2xx response carries a non-JSON content type — typically
+ * the SPA `index.html` fallback served for routes the build does not know.
+ * Repositories treat this as "wrong endpoint candidate" and try the next
+ * path instead of surfacing Ktor's NoTransformationFoundException.
+ */
+class UnsupportedResponseException(
+    val path: String,
+    val contentType: String,
+) : Exception("Sunucu \"$path\" isteğini JSON yerine $contentType ile yanıtladı.")

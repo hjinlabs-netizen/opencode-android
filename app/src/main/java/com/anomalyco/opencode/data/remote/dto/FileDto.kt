@@ -42,6 +42,18 @@ data class FileNodeDto(
         if (isBlank()) child else "$this/$child"
 }
 
+/**
+ * Wrapper shape some servers use for directory listings:
+ * `{"type":"directory","path":"src","entries":[...]}` instead of a bare array.
+ */
+@Serializable
+data class FileListWrapperDto(
+    val path: String = "",
+    val type: String? = null,
+    val entries: List<FileNodeDto> = emptyList(),
+    val children: List<FileNodeDto> = emptyList(),
+)
+
 /** Wire shape of `GET /fs/read`. */
 @Serializable
 data class FileContentDto(

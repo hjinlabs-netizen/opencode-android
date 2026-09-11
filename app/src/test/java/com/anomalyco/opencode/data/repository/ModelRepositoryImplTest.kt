@@ -5,6 +5,7 @@ import com.anomalyco.opencode.util.FakeConnectionRepository
 import com.anomalyco.opencode.util.MockResponse
 import com.anomalyco.opencode.util.postedJson
 import com.anomalyco.opencode.util.recordingClient
+import com.anomalyco.opencode.util.testJson
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -50,6 +51,7 @@ class ModelRepositoryImplTest {
                         else -> MockResponse(body = providerBody)
                     }
                 },
+                testJson(),
             ),
             FakeConnectionRepository(),
         )
@@ -120,6 +122,7 @@ class ModelRepositoryImplTest {
         val repo = ModelRepositoryImpl(
             OpenCodeApi(
                 recordingClient(captured) { MockResponse(status = HttpStatusCode.Forbidden) },
+                testJson(),
             ),
             FakeConnectionRepository(),
         )

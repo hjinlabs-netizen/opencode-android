@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.util
 
+import com.anomalyco.opencode.di.NetworkModule
 import com.anomalyco.opencode.domain.model.HealthInfo
 import com.anomalyco.opencode.domain.model.ServerConfig
 import com.anomalyco.opencode.domain.repository.ConnectionRepository
@@ -15,6 +16,7 @@ import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.serialization.json.Json
 
 /** [ConnectionRepository] double serving a fixed (absent) server config. */
 class FakeConnectionRepository(
@@ -31,7 +33,12 @@ class FakeConnectionRepository(
 data class MockResponse(
     val status: HttpStatusCode = HttpStatusCode.OK,
     val body: String = "",
+    val contentType: String = "application/json",
 )
+
+/** The exact production Json config, for repository-side element decoding. */
+fun testJson(): Json = NetworkModule.opencodeJson()
+
 
 /**
  * JSON [HttpClient] backed by a scriptable, request-recording MockEngine.
@@ -48,13 +55,13 @@ fun recordingClient(
         respond(
             content = answer.body,
             status = answer.status,
-            headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            headers = headersOf(HttpHeaders.ContentType, answer.contentType),
         )
     },
 ) {
     expectSuccess = false
     install(ContentNegotiation) {
-        json(com.anomalyco.opencode.di.NetworkModule.opencodeJson())
+        json(testJson())
     }
 }
 

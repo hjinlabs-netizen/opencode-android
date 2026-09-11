@@ -4,6 +4,7 @@ import com.anomalyco.opencode.domain.model.HealthInfo
 import com.anomalyco.opencode.domain.model.PermissionDecision
 import com.anomalyco.opencode.domain.model.ServerConfig
 import com.anomalyco.opencode.domain.repository.ConnectionRepository
+import com.anomalyco.opencode.util.testJson
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -46,7 +47,7 @@ class InteractionRepositoryImplTest {
                 json(Json { ignoreUnknownKeys = true; encodeDefaults = true })
             }
         }
-        val api = com.anomalyco.opencode.data.remote.OpenCodeApi(client)
+        val api = com.anomalyco.opencode.data.remote.OpenCodeApi(client, testJson())
         return InteractionRepositoryImpl(api, FakeConnection(config))
     }
 
