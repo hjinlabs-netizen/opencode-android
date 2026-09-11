@@ -3,6 +3,7 @@ package com.anomalyco.opencode.data.repository
 import com.anomalyco.opencode.data.remote.OpenCodeApi
 import com.anomalyco.opencode.data.remote.OpenCodeHttpException
 import com.anomalyco.opencode.data.remote.UnsupportedResponseException
+import com.anomalyco.opencode.data.remote.dto.DiffTextDto
 import com.anomalyco.opencode.data.remote.dto.FileContentDto
 import com.anomalyco.opencode.data.remote.dto.FileDiffDto
 import com.anomalyco.opencode.data.remote.dto.FileListWrapperDto
@@ -16,6 +17,7 @@ import com.anomalyco.opencode.domain.model.FileNode
 import com.anomalyco.opencode.domain.model.ServerConfig
 import com.anomalyco.opencode.domain.repository.ConnectionRepository
 import com.anomalyco.opencode.domain.repository.FileRepository
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -27,16 +29,18 @@ import javax.inject.Singleton
 /**
  * Concrete [FileRepository].
  *
- * File/diff route paths are NOT stable across OpenCode server builds: this
- * one serves `/fs/list` + `/fs/diff`, the stock server exposes `/file` and
- * `/vcs/diff`, and unknown routes answer 200 with the SPA `index.html`
- * (which previously crashed ContentNegotiation with
- * `NoTransformationFoundException`). Every operation therefore walks a small
- * candidate chain, treating 404 / non-JSON / unparseable bodies as "wrong
- * endpoint" and only surfacing a friendly error when all candidates miss.
+ * File/diff route paths are NOT stable across OpenCode server builds: some
+ * serve `/fs/list` + `/fs/diff`, the stock server exposes `/find`, `/file`
+ * and `/vcs/diff`, unknown routes answer 200 with the SPA `index.html`, and
+ * endpoints that exist but cannot serve the request (e.g. `/file` without a
+ * path, or any diff route in a NON-GIT working directory) answer HTTP 400.
+ * Every operation therefore walks a candidate chain, treating 400/404,
+ * non-JSON bodies and unparseable JSON as "wrong endpoint" and only
+ * surfacing a friendly error when all candidates miss.
  *
- * An empty directory path omits the `path` query parameter entirely (many
- * servers reject `path=` but default to the project root when absent).
+ * Query policy: a concrete path is always sent as `path=`; a blank/root
+ * path is omitted for `/fs/list` (which rejects `path=`) but defaults to
+ * `.` for the `/find` family, which requires the parameter.
  */
 @Singleton
 class FileRepositoryImpl @Inject constructor(
@@ -69,9 +73,10 @@ class FileRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Working-tree overview: when no diff endpoint exists at all this
-     * degrades to an empty list (the "no changes" screen) instead of
-     * erroring — the diff view is informational, not blocking.
+     * Working-tree overview. When no diff endpoint exists — or none can
+     * serve the request, notably HTTP 400 from `/vcs/diff` in a directory
+     * that is not a git repository — this degrades to an empty list so the
+     * "Değişiklik yok" screen renders instead of an error snackbar.
      */
     override suspend fun workingTreeDiff(): Result<List<FileDiff>> =
         runCatching {
@@ -84,16 +89,23 @@ class FileRepositoryImpl @Inject constructor(
 
     // ---- endpoint candidate chain ------------------------------------------
 
+    /** @param blankPathDefault query value used when the caller has no path. */
+    private data class Endpoint(val path: String, val blankPathDefault: String? = null)
+
     private suspend fun firstUsableJson(
         server: ServerConfig,
-        endpoints: List<String>,
+        endpoints: List<Endpoint>,
         path: String?,
     ): JsonElement {
         var lastError: Throwable =
-            IllegalStateException("Dosya uç noktaları yanıt vermedi: ${endpoints.joinToString()}")
-        val query = if (path.isNullOrBlank()) emptyMap() else mapOf("path" to path)
+            IllegalStateException("Dosya uç noktaları yanıt vermedi: ${endpoints.joinToString { it.path }}")
         for (endpoint in endpoints) {
-            val attempt = runCatching { api.getJson(server.baseUrl, server.token, endpoint, query) }
+            val query = when {
+                !path.isNullOrBlank() -> mapOf("path" to path)
+                endpoint.blankPathDefault != null -> mapOf("path" to endpoint.blankPathDefault)
+                else -> emptyMap()
+            }
+            val attempt = runCatching { api.getJson(server.baseUrl, server.token, endpoint.path, query) }
             val error = attempt.exceptionOrNull()
             if (error == null) return attempt.getOrThrow()
             if (!isEndpointMiss(error)) throw error // auth/network: fail fast, no probing
@@ -102,11 +114,16 @@ class FileRepositoryImpl @Inject constructor(
         throw lastError
     }
 
-    /** 404, SPA-fallback HTML or unparseable JSON mean "try the next path". */
+    /**
+     * "Wrong endpoint" signals that justify trying the next candidate:
+     * 404 (route absent), 400 (route present but cannot serve this request —
+     * missing path param, or non-git workspace for diff endpoints), SPA
+     * HTML fallback and unparseable JSON.
+     */
     private fun isEndpointMiss(error: Throwable?): Boolean =
         error is UnsupportedResponseException ||
-            (error is OpenCodeHttpException && error.code == 404) ||
-            error is kotlinx.serialization.SerializationException
+            (error is OpenCodeHttpException && (error.code == 404 || error.code == 400)) ||
+            error is SerializationException
 
     // ---- tolerant shape decoding --------------------------------------------
 
@@ -135,10 +152,7 @@ class FileRepositoryImpl @Inject constructor(
         }.map { it.toDomain() }
 
         is JsonObject -> runCatching {
-            json.decodeFromJsonElement(
-                com.anomalyco.opencode.data.remote.dto.DiffTextDto.serializer(),
-                element,
-            )
+            json.decodeFromJsonElement(DiffTextDto.serializer(), element)
         }.getOrNull()?.toDomain() ?: emptyList()
 
         else -> emptyList()
@@ -149,8 +163,19 @@ class FileRepositoryImpl @Inject constructor(
             .recoverCatching { throw it.toFriendlyApiException() }
 
     private companion object {
-        val LIST_ENDPOINTS = listOf("/fs/list", "/file")
-        val READ_ENDPOINTS = listOf("/fs/read", "/file")
-        val DIFF_ENDPOINTS = listOf("/fs/diff", "/vcs/diff")
+        val LIST_ENDPOINTS = listOf(
+            Endpoint("/fs/list"),
+            Endpoint("/find", blankPathDefault = "."),
+            Endpoint("/file/find", blankPathDefault = "."),
+            Endpoint("/file", blankPathDefault = "."),
+        )
+        val READ_ENDPOINTS = listOf(
+            Endpoint("/fs/read"),
+            Endpoint("/file"),
+        )
+        val DIFF_ENDPOINTS = listOf(
+            Endpoint("/fs/diff"),
+            Endpoint("/vcs/diff"),
+        )
     }
 }

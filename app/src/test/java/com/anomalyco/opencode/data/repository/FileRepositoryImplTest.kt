@@ -73,19 +73,50 @@ class FileRepositoryImplTest {
     }
 
     @Test
-    fun `html from fs list falls through to the file endpoint`() = runTest {
+    fun `html from fs list falls through the find family to the file endpoint`() = runTest {
         val repo = repository { request ->
             when (pathOf(request)) {
-                "/fs/list" -> html
-                else -> MockResponse(
+                "/file" -> MockResponse(
                     body = """{"type":"directory","path":"src","entries":[{"name":"a.kt","type":"file"}]}""",
                 )
+                else -> html
             }
         }
         val nodes = repo.listDirectory("src").getOrThrow()
 
-        assertEquals(listOf("/fs/list", "/file"), captured.map(::pathOf))
+        assertEquals(listOf("/fs/list", "/find", "/file/find", "/file"), captured.map(::pathOf))
         assertEquals(listOf(FileNode("src/a.kt", "a.kt", isDirectory = false)), nodes)
+    }
+
+    @Test
+    fun `root listing probes find with the path dot default`() = runTest {
+        // The live server rejects `/file` without a path (HTTP 400) and
+        // `/fs/list` serves SPA html; `/find?path=.` is the working combo.
+        val repo = repository { request ->
+            when (pathOf(request)) {
+                "/fs/list" -> html
+                "/find" -> MockResponse(
+                    body = """[{"name":"README.md","type":"file","path":"README.md"}]""",
+                )
+                else -> MockResponse(status = HttpStatusCode.BadRequest)
+            }
+        }
+        val nodes = repo.listDirectory("").getOrThrow()
+
+        assertEquals(listOf("/fs/list", "/find"), captured.map(::pathOf))
+        assertEquals(".", captured.last().url.parameters["path"])
+        assertEquals(listOf(FileNode("README.md", "README.md", isDirectory = false)), nodes)
+    }
+
+    @Test
+    fun `bad-request on every list candidate surfaces a friendly error`() = runTest {
+        val repo = repository { MockResponse(status = HttpStatusCode.BadRequest) }
+        val result = repo.listDirectory("src")
+
+        assertTrue(result.isFailure)
+        assertEquals("Sunucu hatası: HTTP 400", result.exceptionOrNull()?.message)
+        // All four candidates were probed before giving up.
+        assertEquals(4, captured.size)
     }
 
     @Test
@@ -167,6 +198,20 @@ class FileRepositoryImplTest {
     @Test
     fun `workingTreeDiff degrades to an empty list when no diff endpoint exists`() = runTest {
         val repo = repository { html }
+        val result = repo.workingTreeDiff()
+
+        assertTrue(result.isSuccess)
+        assertTrue(result.getOrThrow().isEmpty())
+        assertEquals(listOf("/fs/diff", "/vcs/diff"), captured.map(::pathOf))
+    }
+
+    @Test
+    fun `non-git workspace 400 from diff endpoints degrades to an empty list`() = runTest {
+        // "Git deposu: Hayır" — the server answers diff routes with HTTP 400
+        // ("not a git repository"); the screen must show "Değişiklik yok".
+        val repo = repository {
+            MockResponse(status = HttpStatusCode.BadRequest, body = """{"error":"not a git repository"}""")
+        }
         val result = repo.workingTreeDiff()
 
         assertTrue(result.isSuccess)
