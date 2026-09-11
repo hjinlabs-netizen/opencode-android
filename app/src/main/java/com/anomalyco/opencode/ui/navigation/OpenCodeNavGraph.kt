@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.anomalyco.opencode.ui.chat.ChatScreen
+import com.anomalyco.opencode.ui.chat.ChatViewModel
 import com.anomalyco.opencode.ui.connection.ConnectionScreen
 import com.anomalyco.opencode.ui.files.DiffScreen
 import com.anomalyco.opencode.ui.files.FileExplorerScreen
@@ -81,7 +82,9 @@ fun OpenCodeNavGraph(
         ) {
             ChatScreen(
                 onBack = { navController.popBackStack() },
-                onOpenFiles = { navController.navigate(Routes.FILES) },
+                onOpenFiles = { directory ->
+                    navController.navigate(Routes.files(directory))
+                },
                 onOpenDiff = { navController.navigate(Routes.DIFF) },
             )
         }
@@ -95,7 +98,17 @@ fun OpenCodeNavGraph(
                 },
             ),
         ) {
-            FileExplorerScreen(onBack = { navController.popBackStack() })
+            FileExplorerScreen(
+                onBack = { navController.popBackStack() },
+                // "Sohbete Ekle": hand the path to the chat entry we return to
+                // via its SavedStateHandle, then pop back to it.
+                onAddToChat = { path ->
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set(ChatViewModel.PICKED_FILE_KEY, path)
+                    navController.popBackStack()
+                },
+            )
         }
 
         composable(Routes.DIFF) {

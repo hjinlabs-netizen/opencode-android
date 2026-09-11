@@ -47,8 +47,10 @@ private class FakeSessionRepository : SessionRepository {
     var sendGate: CompletableDeferred<Unit>? = null
 
     override suspend fun refreshSessions(): Result<List<SessionSummary>> = Result.success(emptyList())
-    override suspend fun createSession(agent: String?, title: String?) = Result.success(session)
+    override suspend fun createSession(agent: String?, title: String?, directory: String?) =
+        Result.success(session)
     override suspend fun getSession(sessionId: String) = Result.success(session)
+    override suspend fun deleteSession(sessionId: String) = Result.success(Unit)
     override suspend fun loadMessages(sessionId: String): Result<List<ChatMessage>> {
         loadCalls++
         return Result.success(history)
@@ -112,12 +114,14 @@ private class ChatHarness(
     val stream: FakeStreamRepository,
     val interactions: FakeInteractionRepository,
     val models: FakeModelRepository,
+    val handle: SavedStateHandle,
 ) {
     operator fun component1() = viewModel
     operator fun component2() = sessions
     operator fun component3() = stream
     operator fun component4() = interactions
     operator fun component5() = models
+    operator fun component6() = handle
 }
 
 class ChatViewModelTest {
@@ -130,14 +134,9 @@ class ChatViewModelTest {
         val stream = FakeStreamRepository()
         val interactions = FakeInteractionRepository()
         val models = FakeModelRepository()
-        val vm = ChatViewModel(
-            SavedStateHandle(mapOf("sessionId" to "s1")),
-            sessions,
-            stream,
-            interactions,
-            models,
-        )
-        return ChatHarness(vm, sessions, stream, interactions, models)
+        val handle = SavedStateHandle(mapOf("sessionId" to "s1"))
+        val vm = ChatViewModel(handle, sessions, stream, interactions, models)
+        return ChatHarness(vm, sessions, stream, interactions, models, handle)
     }
 
     private fun assistant(id: String) = ChatMessage(
@@ -694,5 +693,49 @@ class ChatViewModelTest {
         assertEquals(listOf("m1", "m2", MessageAssembler.liveMessageId("s1")), ids)
         // No duplicated live content: the partial is still exactly one bubble.
         assertEquals("par", (vm.uiState.value.messages.last().parts.single() as MessagePart.TextPart).content)
+    }
+
+    // ---- file context selection (Phase 5) ----------------------------------
+
+    @Test
+    fun `appendMention formats empty and non-empty prompts`() {
+        assertEquals("@a/b.kt ", ChatViewModel.appendMention("", "a/b.kt"))
+        assertEquals("x @a/b.kt ", ChatViewModel.appendMention("x ", "a/b.kt"))
+        assertEquals(
+            "şu dosyaya bak: @C:\\t\\build.gradle.kts ",
+            ChatViewModel.appendMention("şu dosyaya bak:", """C:\t\build.gradle.kts"""),
+        )
+    }
+
+    @Test
+    fun `picked file from explorer appends mention and clears the nav result`() = runTest {
+        val (vm, _, _, _, _, handle) = build()
+        advanceUntilIdle()
+
+        vm.onInputChange("şu dosyaya bak:")
+        handle[ChatViewModel.PICKED_FILE_KEY] = """Desktop\t24\app\build.gradle.kts"""
+        advanceUntilIdle()
+
+        assertEquals(
+            "şu dosyaya bak: @Desktop\\t24\\app\\build.gradle.kts ",
+            vm.uiState.value.input,
+        )
+        // Result consumed: cleared so rotation does not re-append.
+        assertNull(handle.get<String>(ChatViewModel.PICKED_FILE_KEY))
+
+        // A second pick appends again.
+        handle[ChatViewModel.PICKED_FILE_KEY] = "src/main.kt"
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.input.endsWith("@src/main.kt "))
+    }
+
+    @Test
+    fun `session directory from server feeds the ui state`() = runTest {
+        val (vm, sessions) = build()
+        sessions.session = Session(id = "s1", title = "Ses", directory = """C:\work\t24""")
+        vm.refresh()
+        advanceUntilIdle()
+
+        assertEquals("""C:\work\t24""", vm.uiState.value.directory)
     }
 }

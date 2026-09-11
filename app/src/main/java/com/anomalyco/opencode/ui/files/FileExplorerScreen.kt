@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.CircularProgressIndicator
@@ -53,11 +54,14 @@ import com.anomalyco.opencode.domain.model.FileNode
 /**
  * Project file browser. Tapping a directory descends, a file opens the
  * text-preview overlay; system back walks up the path stack before leaving.
+ * [onAddToChat], when provided (chat-originated navigation), inserts the
+ * previewed file into the chat prompt as an `@path` context mention.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileExplorerScreen(
     onBack: () -> Unit,
+    onAddToChat: ((String) -> Unit)? = null,
     viewModel: FileExplorerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -105,6 +109,17 @@ fun FileExplorerScreen(
                             },
                             contentDescription = "Geri",
                         )
+                    }
+                },
+                actions = {
+                    val open = state.openFile
+                    if (open != null && onAddToChat != null) {
+                        IconButton(onClick = { onAddToChat(open.path) }) {
+                            Icon(
+                                imageVector = Icons.Filled.AddComment,
+                                contentDescription = "Sohbete ekle",
+                            )
+                        }
                     }
                 },
             )

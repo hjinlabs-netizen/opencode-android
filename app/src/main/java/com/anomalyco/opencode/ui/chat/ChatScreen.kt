@@ -72,7 +72,7 @@ import com.anomalyco.opencode.ui.theme.Warning
 @Composable
 fun ChatScreen(
     onBack: () -> Unit,
-    onOpenFiles: () -> Unit = {},
+    onOpenFiles: (String) -> Unit = {},
     onOpenDiff: () -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
@@ -153,7 +153,7 @@ fun ChatScreen(
                             )
                         }
                     }
-                    IconButton(onClick = onOpenFiles) {
+                    IconButton(onClick = { onOpenFiles(state.directory) }) {
                         Icon(Icons.Filled.Folder, contentDescription = "Dosyalar")
                     }
                     IconButton(onClick = onOpenDiff) {

@@ -54,6 +54,8 @@ sealed interface PendingInteraction {
 data class ChatUiState(
     val sessionId: String = "",
     val sessionTitle: String = "",
+    /** Server-side working directory of this session (file explorer root). */
+    val directory: String = "",
     val messages: List<ChatMessage> = emptyList(),
     val input: String = "",
     val agent: AgentMode = AgentMode.BUILD,
@@ -86,7 +88,7 @@ data class ChatUiState(
  */
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
     private val sessionRepository: SessionRepository,
     private val chatStreamRepository: ChatStreamRepository,
     private val interactionRepository: InteractionRepository,
@@ -125,13 +127,24 @@ class ChatViewModel @Inject constructor(
                 runCatching { onStreamEvent(event) }
             }
         }
+        // File chosen in the explorer ("Sohbete Ekle") arrives as a nav result.
+        viewModelScope.launch {
+            savedStateHandle.getStateFlow<String?>(PICKED_FILE_KEY, null).collect { path ->
+                if (!path.isNullOrBlank()) {
+                    _uiState.update { it.copy(input = appendMention(it.input, path)) }
+                    savedStateHandle[PICKED_FILE_KEY] = null
+                }
+            }
+        }
     }
 
     /** (Re)loads the message transcript and session metadata from the server. */
     fun refresh() {
         viewModelScope.launch {
             sessionRepository.getSession(sessionId).onSuccess { session ->
-                _uiState.update { it.copy(sessionTitle = session.title) }
+                _uiState.update {
+                    it.copy(sessionTitle = session.title, directory = session.directory.orEmpty())
+                }
             }
             sessionRepository.loadMessages(sessionId)
                 .onSuccess { history ->
@@ -427,5 +440,17 @@ class ChatViewModel @Inject constructor(
 
     companion object {
         const val ARG_SESSION_ID = "sessionId"
+
+        /** SavedStateHandle key the file explorer writes as its navigation result. */
+        const val PICKED_FILE_KEY = "pickedFile"
+
+        /**
+         * Appends an `@path` context mention to the prompt, keeping any text
+         * already typed and guaranteeing a trailing space for continued input.
+         */
+        internal fun appendMention(current: String, path: String): String {
+            val base = current.trimEnd()
+            return if (base.isEmpty()) "@$path " else "$base @$path "
+        }
     }
 }

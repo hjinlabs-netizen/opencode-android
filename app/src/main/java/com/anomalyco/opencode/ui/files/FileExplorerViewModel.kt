@@ -48,12 +48,9 @@ class FileExplorerViewModel @Inject constructor(
     val uiState: StateFlow<FileExplorerUiState> = _uiState.asStateFlow()
 
     init {
-        if (initialPath.isEmpty()) {
-            loadDirectory("")
-        } else {
-            // Arriving with a file path (agent reference): preview it directly.
-            loadFile(initialPath)
-        }
+        // Arriving with a path (e.g. the session's working directory) lists
+        // that directory; blank lists the server default root.
+        loadDirectory(initialPath)
     }
 
     fun onNodeClick(node: FileNode) {
