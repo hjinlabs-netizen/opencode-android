@@ -91,13 +91,19 @@ class SessionRepositoryImpl @Inject constructor(
         _sessions.update { list -> list.filterNot { it.id == sessionId } }
     }
 
-    override suspend fun loadMessages(sessionId: String): Result<List<ChatMessage>> = guarded {
+    override suspend fun loadMessages(sessionId: String): Result<List<ChatMessage>> = safe {
         val server = requireServer()
         api.listMessages(server.baseUrl, server.token, sessionId)
             .map(MessageDto::toDomain)
     }
 
-    override suspend fun sendPrompt(sessionId: String, text: String, agent: String?): Result<ChatMessage> = guarded {
+    /**
+     * `POST /session/{id}/message` is a LONG POLL that resolves only at end of
+     * turn. It MUST NOT hold [cacheMutex], otherwise every cache-mutating and
+     * read call (notably [abortSession] / [loadMessages]) blocks behind it for
+     * the whole turn — which is exactly why the Abort button appeared dead.
+     */
+    override suspend fun sendPrompt(sessionId: String, text: String, agent: String?): Result<ChatMessage> = safe {
         val server = requireServer()
         api.sendPrompt(
             server.baseUrl,
@@ -107,7 +113,8 @@ class SessionRepositoryImpl @Inject constructor(
         ).toDomain()
     }
 
-    override suspend fun abortSession(sessionId: String): Result<Unit> = guarded {
+    /** `POST /session/{id}/abort` (confirmed against the OpenCode HTTP API). Never blocks on the cache. */
+    override suspend fun abortSession(sessionId: String): Result<Unit> = safe {
         val server = requireServer()
         api.abortSession(server.baseUrl, server.token, sessionId)
     }
@@ -121,9 +128,12 @@ class SessionRepositoryImpl @Inject constructor(
         }
     }
 
+    /** Cache-mutating ops serialize on [cacheMutex]. */
     private suspend fun <T> guarded(block: suspend () -> T): Result<T> =
-        cacheMutex.withLock {
-            runCatching { block() }
-                .recoverCatching { throw it.toFriendlyApiException() }
-        }
+        cacheMutex.withLock { safe(block) }
+
+    /** Error mapping WITHOUT the cache mutex (for long-poll / read / abort calls). */
+    private suspend fun <T> safe(block: suspend () -> T): Result<T> =
+        runCatching { block() }
+            .recoverCatching { throw it.toFriendlyApiException() }
 }

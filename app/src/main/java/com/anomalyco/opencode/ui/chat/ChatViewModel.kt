@@ -18,6 +18,7 @@ import com.anomalyco.opencode.domain.repository.InteractionRepository
 import com.anomalyco.opencode.domain.repository.ModelRepository
 import com.anomalyco.opencode.domain.repository.SessionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -108,10 +109,27 @@ class ChatViewModel @Inject constructor(
      */
     private var turnToken = 0L
 
+    /** The in-flight end-of-turn `sendPrompt` job; cancelled by [abort] for instant release. */
+    private var sendJob: Job? = null
+
     private val _uiState = MutableStateFlow(ChatUiState(sessionId = sessionId))
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     init {
+        // Cold start: show the persisted model immediately (before the catalog
+        // loads) so the top-bar chip is never blank after a process restart.
+        modelRepository.preferredSelection()?.let { pref ->
+            _uiState.update {
+                it.copy(
+                    currentModel = ModelInfo(
+                        providerId = pref.providerId,
+                        modelId = pref.modelId,
+                        displayName = pref.modelId,
+                        isCurrent = true,
+                    ),
+                )
+            }
+        }
         refresh()
         viewModelScope.launch {
             // Resilience (Phase 4): when a dropped stream reconnects and goes
@@ -198,14 +216,36 @@ class ChatViewModel @Inject constructor(
             _uiState.update { it.copy(isLoadingProviders = true) }
             modelRepository.fetchProviders()
                 .onSuccess { providers ->
+                    val serverCurrent = providers
+                        .flatMap { it.models }
+                        .firstOrNull { it.isCurrent }
+                    // Server reported no active model: restore the persisted
+                    // selection (if it exists in this catalog) and re-apply it
+                    // to `/config` so the agent uses it.
+                    val restored = serverCurrent ?: run {
+                        val pref = modelRepository.preferredSelection()
+                        pref?.let { p ->
+                            providers.flatMap { it.models }
+                                .firstOrNull { it.providerId == p.providerId && it.modelId == p.modelId }
+                        }
+                    }
+                    val effective = restored?.copy(isCurrent = true)
                     _uiState.update { current ->
                         current.copy(
-                            providers = providers,
-                            currentModel = providers
-                                .flatMap { it.models }
-                                .firstOrNull { it.isCurrent },
+                            providers = if (restored != null && serverCurrent == null) {
+                                providers.withCurrent(restored.qualifiedId)
+                            } else {
+                                providers
+                            },
+                            currentModel = effective ?: current.currentModel?.let { seed ->
+                                providers.flatMap { it.models }
+                                    .firstOrNull { it.qualifiedId == seed.qualifiedId }
+                            },
                             isLoadingProviders = false,
                         )
+                    }
+                    if (serverCurrent == null && restored != null) {
+                        modelRepository.setActiveModel(restored.providerId, restored.modelId)
                     }
                 }
                 .onFailure { error ->
@@ -214,6 +254,12 @@ class ChatViewModel @Inject constructor(
                     }
                 }
         }
+    }
+
+    private fun List<ProviderConfig>.withCurrent(qualifiedId: String) = map { provider ->
+        provider.copy(
+            models = provider.models.map { it.copy(isCurrent = it.qualifiedId == qualifiedId) },
+        )
     }
 
     fun openModelPicker() {
@@ -280,7 +326,7 @@ class ChatViewModel @Inject constructor(
                 lastPrompt = text,
             )
         }
-        viewModelScope.launch {
+        sendJob = viewModelScope.launch {
             val outcome =
                 sessionRepository.sendPrompt(sessionId, text, agent = state.agent.wireName)
             // The optimistic row may always be swapped for its server twin —
@@ -322,17 +368,24 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * Abort the running turn (Sprint C). Bumps the turn token so the still
-     * in-flight end-of-turn `sendPrompt` long-poll cannot re-arm busy state
-     * or re-sync over the reconciled transcript, then settles and reconciles.
+     * Abort the running turn with INSTANT client-side release (the reported
+     * bug was the button doing nothing while the agent kept generating):
+     *  1. bump the turn token so the abandoned long-poll can never re-arm busy
+     *     or overwrite the reconciled transcript,
+     *  2. cancel the in-flight `sendPrompt` job (this also frees the server),
+     *  3. settle `isBusy`/`isSending` synchronously — the UI frees immediately,
+     *     without waiting on any network I/O,
+     *  4. fire `POST /session/{id}/abort` in the background and reconcile.
      */
     fun abort() {
-        if (!_uiState.value.isBusy) return
+        if (!_uiState.value.isBusy && !_uiState.value.isSending) return
         val token = ++turnToken
+        sendJob?.cancel()
+        sendJob = null
+        _uiState.update { it.copy(isBusy = false, isSending = false) }
         viewModelScope.launch {
             sessionRepository.abortSession(sessionId)
                 .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
-            _uiState.update { it.copy(isBusy = false, isSending = false) }
             syncTranscriptFromServer(token)
         }
     }

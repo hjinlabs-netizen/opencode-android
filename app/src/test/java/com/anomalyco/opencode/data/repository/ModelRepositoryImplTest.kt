@@ -1,7 +1,9 @@
 package com.anomalyco.opencode.data.repository
 
 import com.anomalyco.opencode.data.remote.OpenCodeApi
+import com.anomalyco.opencode.domain.model.ModelSelection
 import com.anomalyco.opencode.util.FakeConnectionRepository
+import com.anomalyco.opencode.util.InMemoryPreferenceStore
 import com.anomalyco.opencode.util.MockResponse
 import com.anomalyco.opencode.util.postedJson
 import com.anomalyco.opencode.util.recordingClient
@@ -23,6 +25,8 @@ import org.junit.Test
 class ModelRepositoryImplTest {
 
     private val captured = mutableListOf<HttpRequestData>()
+
+    private val store = InMemoryPreferenceStore()
 
     private val providerJson = """
         {
@@ -54,6 +58,7 @@ class ModelRepositoryImplTest {
                 testJson(),
             ),
             FakeConnectionRepository(),
+            store,
         )
 
     @Test
@@ -125,6 +130,7 @@ class ModelRepositoryImplTest {
                 testJson(),
             ),
             FakeConnectionRepository(),
+            store,
         )
         val result = repo.setActiveModel("bad", "model")
 
@@ -132,6 +138,52 @@ class ModelRepositoryImplTest {
         val failure = result.exceptionOrNull()!!
         assertTrue(failure.message!!.contains("Kimlik doğrulama başarısız"))
         assertTrue(failure.cause is com.anomalyco.opencode.data.remote.OpenCodeHttpException)
+    }
+
+    // ---- local persistence of the active selection -------------------------
+
+    @Test
+    fun `setActiveModel writes the choice to the preference store`() = runTest {
+        repository().setActiveModel("openai", "gpt-z")
+
+        assertEquals("openai", store.map["last_selected_provider_id"])
+        assertEquals("gpt-z", store.map["last_selected_model_id"])
+    }
+
+    @Test
+    fun `setActiveModel persists even when the network switch fails`() = runTest {
+        val repo = ModelRepositoryImpl(
+            OpenCodeApi(
+                recordingClient(captured) { MockResponse(status = HttpStatusCode.Forbidden) },
+                testJson(),
+            ),
+            FakeConnectionRepository(),
+            store,
+        )
+
+        assertTrue(repo.setActiveModel("anthropic", "claude-y").isFailure)
+        assertEquals("anthropic", store.map["last_selected_provider_id"])
+        assertEquals("claude-y", store.map["last_selected_model_id"])
+    }
+
+    @Test
+    fun `preferredSelection reads back the stored choice`() = runTest {
+        repository().setActiveModel("anthropic", "claude-y")
+
+        assertEquals(ModelSelection("anthropic", "claude-y"), repository().preferredSelection())
+    }
+
+    @Test
+    fun `preferredSelection is null when nothing was ever chosen`() {
+        assertNull(repository().preferredSelection())
+    }
+
+    @Test
+    fun `preferredSelection is null when a stored value is blank`() {
+        store.map["last_selected_provider_id"] = "anthropic"
+        store.map["last_selected_model_id"] = "   "
+
+        assertNull(repository().preferredSelection())
     }
 
     // ---- map-shaped `models` (the live `/provider` payload format) ----------

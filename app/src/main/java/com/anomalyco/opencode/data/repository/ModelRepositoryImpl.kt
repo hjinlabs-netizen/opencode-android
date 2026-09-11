@@ -4,6 +4,8 @@ import com.anomalyco.opencode.data.remote.OpenCodeApi
 import com.anomalyco.opencode.data.remote.dto.ConfigPatchDto
 import com.anomalyco.opencode.data.remote.requireActiveServer
 import com.anomalyco.opencode.data.remote.toFriendlyApiException
+import com.anomalyco.opencode.data.settings.PreferenceStore
+import com.anomalyco.opencode.domain.model.ModelSelection
 import com.anomalyco.opencode.domain.model.ProviderConfig
 import com.anomalyco.opencode.domain.repository.ConnectionRepository
 import com.anomalyco.opencode.domain.repository.ModelRepository
@@ -15,11 +17,16 @@ import javax.inject.Singleton
  * sources (`/config` for the active selection, `/provider` for the catalog);
  * a config read failure must never hide the catalog, so it degrades to
  * unflagged providers instead of an error.
+ *
+ * Selections are additionally mirrored into [PreferenceStore] (plain prefs —
+ * a model id is not a secret) so the last user choice survives process
+ * restarts even when the server reports no active model (`preferredSelection`).
  */
 @Singleton
 class ModelRepositoryImpl @Inject constructor(
     private val api: OpenCodeApi,
     private val connectionRepository: ConnectionRepository,
+    private val store: PreferenceStore,
 ) : ModelRepository {
 
     override suspend fun fetchProviders(): Result<List<ProviderConfig>> = guarded {
@@ -30,16 +37,38 @@ class ModelRepositoryImpl @Inject constructor(
         api.getProviders(server.baseUrl, server.token).toDomain(current)
     }
 
-    override suspend fun setActiveModel(providerId: String, modelId: String): Result<Unit> = guarded {
-        val server = connectionRepository.requireActiveServer()
-        api.updateConfig(
-            server.baseUrl,
-            server.token,
-            ConfigPatchDto(model = "$providerId/$modelId"),
-        )
+    override suspend fun setActiveModel(providerId: String, modelId: String): Result<Unit> {
+        // Persist the intent first: even if the network switch fails, the next
+        // cold start can retry applying it.
+        rememberSelection(providerId, modelId)
+        return guarded {
+            val server = connectionRepository.requireActiveServer()
+            api.updateConfig(
+                server.baseUrl,
+                server.token,
+                ConfigPatchDto(model = "$providerId/$modelId"),
+            )
+        }
+    }
+
+    override fun preferredSelection(): ModelSelection? {
+        val provider = store.getString(KEY_PROVIDER) ?: return null
+        val model = store.getString(KEY_MODEL) ?: return null
+        if (provider.isBlank() || model.isBlank()) return null
+        return ModelSelection(provider, model)
+    }
+
+    private fun rememberSelection(providerId: String, modelId: String) {
+        store.putString(KEY_PROVIDER, providerId)
+        store.putString(KEY_MODEL, modelId)
     }
 
     private suspend fun <T> guarded(block: suspend () -> T): Result<T> =
         runCatching { block() }
             .recoverCatching { throw it.toFriendlyApiException() }
+
+    private companion object {
+        const val KEY_PROVIDER = "last_selected_provider_id"
+        const val KEY_MODEL = "last_selected_model_id"
+    }
 }

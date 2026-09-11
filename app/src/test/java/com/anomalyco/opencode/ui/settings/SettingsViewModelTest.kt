@@ -57,6 +57,7 @@ private class FakeModels : ModelRepository {
     var providersResult: Result<List<ProviderConfig>> = Result.success(emptyList())
     override suspend fun fetchProviders() = providersResult
     override suspend fun setActiveModel(providerId: String, modelId: String) = Result.success(Unit)
+    override fun preferredSelection(): com.anomalyco.opencode.domain.model.ModelSelection? = null
 }
 
 class SettingsViewModelTest {

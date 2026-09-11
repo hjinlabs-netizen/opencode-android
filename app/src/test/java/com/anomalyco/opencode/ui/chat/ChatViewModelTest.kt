@@ -103,6 +103,7 @@ private class FakeInteractionRepository : InteractionRepository {
 private class FakeModelRepository : ModelRepository {
     var providersResult: Result<List<ProviderConfig>> = Result.success(emptyList())
     var setResult: Result<Unit> = Result.success(Unit)
+    var preferred: com.anomalyco.opencode.domain.model.ModelSelection? = null
     var fetchCalls = 0
     val setCalls = mutableListOf<Pair<String, String>>()
 
@@ -115,6 +116,8 @@ private class FakeModelRepository : ModelRepository {
         setCalls += providerId to modelId
         return setResult
     }
+
+    override fun preferredSelection(): com.anomalyco.opencode.domain.model.ModelSelection? = preferred
 }
 
 /** All collaborators + the ViewModel built under test. */
