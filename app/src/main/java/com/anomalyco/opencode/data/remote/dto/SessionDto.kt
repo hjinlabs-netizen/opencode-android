@@ -17,6 +17,8 @@ data class SessionDto(
     val id: String = "",
     val title: String? = null,
     val agent: String? = null,
+    val directory: String? = null,
+    val projectID: String? = null,
     val time: TimeDto? = null,
     /** Fallbacks for builds that expose flat timestamps. */
     val createdAt: Long? = null,
@@ -37,6 +39,7 @@ data class SessionDto(
         id = id,
         title = title.orEmpty(),
         agent = agent,
+        directory = directory,
         createdAt = createdMillis(),
         updatedAt = updatedMillis(),
     )
@@ -44,9 +47,14 @@ data class SessionDto(
     fun toSummary(): SessionSummary = toDomain().toSummary()
 }
 
-/** Request body for `POST /session`. Both fields are optional server-side. */
+/**
+ * Request body for `POST /session`. All fields optional server-side; the
+ * shared Json omits nulls (`explicitNulls = false`) so a quick-create sends
+ * a bare `{}` and a directory-scoped create sends `{"directory": "..."}`.
+ */
 @Serializable
 data class CreateSessionRequest(
     val title: String? = null,
     val agent: String? = null,
+    val directory: String? = null,
 )

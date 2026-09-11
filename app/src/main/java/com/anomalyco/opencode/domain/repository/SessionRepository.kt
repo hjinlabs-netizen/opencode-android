@@ -20,11 +20,21 @@ interface SessionRepository {
     /** Pull the session list from the server and update the cache. */
     suspend fun refreshSessions(): Result<List<SessionSummary>>
 
-    /** Create a session on the server; optionally naming the driving agent. */
-    suspend fun createSession(agent: String? = null, title: String? = null): Result<Session>
+    /** Create a session on the server; optionally naming the driving agent and binding a working [directory]. */
+    suspend fun createSession(
+        agent: String? = null,
+        title: String? = null,
+        directory: String? = null,
+    ): Result<Session>
 
     /** Fetch a single session's details. */
     suspend fun getSession(sessionId: String): Result<Session>
+
+    /**
+     * Delete a session server-side; the in-memory cache drops it on success.
+     * A 404 counts as success (already gone).
+     */
+    suspend fun deleteSession(sessionId: String): Result<Unit>
 
     /** Fetch the full message history (with parts) of a session. */
     suspend fun loadMessages(sessionId: String): Result<List<ChatMessage>>

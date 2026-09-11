@@ -15,6 +15,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -82,6 +83,18 @@ class OpenCodeApi @Inject constructor(
         token: String,
         sessionId: String,
     ): SessionDto = authorizedGet(baseUrl, token, "$SESSIONS_PATH/$sessionId").body()
+
+    /**
+     * `DELETE /session/{id}` — permanently delete a session server-side.
+     * The response body is irrelevant; success is the 2xx status itself.
+     */
+    suspend fun deleteSession(
+        baseUrl: String,
+        token: String,
+        sessionId: String,
+    ): Unit = validated {
+        client.delete("$baseUrl$SESSIONS_PATH/$sessionId") { authorize(token) }
+    }.let { }
 
     /** `GET /session/{id}/message` — fetch the message history (info + parts). */
     suspend fun listMessages(

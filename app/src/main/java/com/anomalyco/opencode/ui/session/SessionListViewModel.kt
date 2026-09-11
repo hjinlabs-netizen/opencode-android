@@ -4,10 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anomalyco.opencode.domain.model.SessionSummary
 import com.anomalyco.opencode.domain.repository.SessionRepository
+import com.anomalyco.opencode.domain.repository.WorkspaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -20,25 +23,39 @@ data class SessionListUiState(
     val error: String? = null,
     /** One-shot navigation signal, consumed via [SessionListViewModel.onSessionOpened]. */
     val createdSessionId: String? = null,
+    /** --- new-session flow (Phase 5) --- */
+    val showNewSessionOptions: Boolean = false,
+    val showDirectoryDialog: Boolean = false,
+    val directoryInput: String = "",
+    /** --- multi-select deletion (Phase 5) --- */
+    val selectionMode: Boolean = false,
+    val selectedIds: Set<String> = emptySet(),
+    val showDeleteConfirm: Boolean = false,
+    val isDeleting: Boolean = false,
 )
 
 /**
- * Session list screen state: live cache observations plus refresh and
- * create-session intents. Errors surface through [SessionListUiState.error]
- * and are expected to be acknowledged by the snackbar host.
+ * Session list screen state: live cache observations, quick/custom session
+ * creation (with recent working directories), long-press multi-select and
+ * confirmed batch deletion. Errors surface through [SessionListUiState.error].
  */
 @HiltViewModel
 class SessionListViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
+    private val workspaceRepository: WorkspaceRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SessionListUiState())
     val uiState: StateFlow<SessionListUiState> = _uiState.asStateFlow()
 
+    /** Most recently used working directories, newest first. */
+    val recentDirectories: StateFlow<List<String>> = workspaceRepository.recentDirectories
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     init {
         viewModelScope.launch {
             sessionRepository.sessions.collect { list ->
-                _uiState.update { it.copy(sessions = list, isLoading = false) }
+                _uiState.update { state -> state.copy(sessions = list, isLoading = false) }
             }
         }
         refresh()
@@ -55,13 +72,45 @@ class SessionListViewModel @Inject constructor(
         }
     }
 
-    /** Creates a fresh session and asks the navigation layer to open it. */
-    fun createSession() {
+    // ---- new session flow ----------------------------------------------------
+
+    fun showNewSessionOptions() = _uiState.update { it.copy(showNewSessionOptions = true) }
+
+    fun dismissNewSessionOptions() = _uiState.update { it.copy(showNewSessionOptions = false) }
+
+    fun showDirectoryDialog() = _uiState.update {
+        it.copy(showNewSessionOptions = false, showDirectoryDialog = true)
+    }
+
+    fun dismissDirectoryDialog() = _uiState.update {
+        it.copy(showDirectoryDialog = false, directoryInput = "")
+    }
+
+    fun onDirectoryInputChange(value: String) = _uiState.update { it.copy(directoryInput = value) }
+
+    /** Quick create on the server default directory. */
+    fun quickCreateSession() {
+        _uiState.update { it.copy(showNewSessionOptions = false) }
+        createSessionInternal(directory = null)
+    }
+
+    /** Create bound to the typed/recently-picked working directory. */
+    fun createSessionWithDirectory() {
+        val directory = _uiState.value.directoryInput.trim()
+        if (directory.isEmpty()) return
+        _uiState.update { it.copy(showDirectoryDialog = false, directoryInput = "") }
+        createSessionInternal(directory)
+    }
+
+    private fun createSessionInternal(directory: String?) {
         if (_uiState.value.isCreating) return
         viewModelScope.launch {
             _uiState.update { it.copy(isCreating = true) }
-            sessionRepository.createSession()
+            sessionRepository.createSession(directory = directory)
                 .onSuccess { session ->
+                    if (!directory.isNullOrBlank()) {
+                        workspaceRepository.rememberDirectory(directory)
+                    }
                     _uiState.update {
                         it.copy(createdSessionId = session.id, isCreating = false)
                     }
@@ -75,4 +124,77 @@ class SessionListViewModel @Inject constructor(
     fun onSessionOpened() = _uiState.update { it.copy(createdSessionId = null) }
 
     fun onErrorShown() = _uiState.update { it.copy(error = null) }
+
+    // ---- multi-select deletion -------------------------------------------------
+
+    /** Row tap: open the session, or toggle its selection in selection mode. */
+    fun onSessionClick(sessionId: String) {
+        if (_uiState.value.selectionMode) {
+            toggleSelection(sessionId)
+        } else {
+            _uiState.update { it.copy(createdSessionId = sessionId) }
+        }
+    }
+
+    fun onSessionLongClick(sessionId: String) {
+        _uiState.update {
+            it.copy(selectionMode = true, selectedIds = it.selectedIds + sessionId)
+        }
+    }
+
+    fun toggleSelection(sessionId: String) {
+        _uiState.update { state ->
+            val selected =
+                if (sessionId in state.selectedIds) state.selectedIds - sessionId
+                else state.selectedIds + sessionId
+            state.copy(
+                selectedIds = selected,
+                // Dropping the last selection leaves selection mode.
+                selectionMode = selected.isNotEmpty(),
+            )
+        }
+    }
+
+    fun selectAll() = _uiState.update {
+        it.copy(selectionMode = true, selectedIds = it.sessions.map { s -> s.id }.toSet())
+    }
+
+    fun clearSelection() = _uiState.update {
+        it.copy(selectionMode = false, selectedIds = emptySet())
+    }
+
+    fun requestDeleteSelection() {
+        if (_uiState.value.selectedIds.isEmpty()) return
+        _uiState.update { it.copy(showDeleteConfirm = true) }
+    }
+
+    fun cancelDelete() = _uiState.update { it.copy(showDeleteConfirm = false) }
+
+    /** Deletes every selected session; failures keep those rows and are reported. */
+    fun confirmDelete() {
+        val ids = _uiState.value.selectedIds
+        if (ids.isEmpty() || _uiState.value.isDeleting) {
+            _uiState.update { it.copy(showDeleteConfirm = false) }
+            return
+        }
+        _uiState.update { it.copy(showDeleteConfirm = false, isDeleting = true) }
+        viewModelScope.launch {
+            val failed = mutableListOf<String>()
+            ids.forEach { id ->
+                sessionRepository.deleteSession(id).onFailure { failed += id }
+            }
+            _uiState.update { state ->
+                state.copy(
+                    isDeleting = false,
+                    selectionMode = false,
+                    selectedIds = emptySet(),
+                    // Rows whose delete was rejected stay visible.
+                    error = failed.takeIf { it.isNotEmpty() }?.let {
+                        "${it.size} oturum silinemedi."
+                    },
+                )
+            }
+            if (failed.isEmpty()) refresh()
+        }
+    }
 }

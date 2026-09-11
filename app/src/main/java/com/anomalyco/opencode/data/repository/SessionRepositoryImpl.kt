@@ -2,6 +2,7 @@ package com.anomalyco.opencode.data.repository
 
 import com.anomalyco.opencode.data.remote.NoServerConfiguredException
 import com.anomalyco.opencode.data.remote.OpenCodeApi
+import com.anomalyco.opencode.data.remote.OpenCodeHttpException
 import com.anomalyco.opencode.data.remote.dto.CreateSessionRequest
 import com.anomalyco.opencode.data.remote.dto.MessageDto
 import com.anomalyco.opencode.data.remote.dto.PartInputDto
@@ -51,12 +52,20 @@ class SessionRepositoryImpl @Inject constructor(
         fresh
     }
 
-    override suspend fun createSession(agent: String?, title: String?): Result<Session> = guarded {
+    override suspend fun createSession(
+        agent: String?,
+        title: String?,
+        directory: String?,
+    ): Result<Session> = guarded {
         val server = requireServer()
         val created = api.createSession(
             server.baseUrl,
             server.token,
-            CreateSessionRequest(title = title, agent = agent),
+            CreateSessionRequest(
+                title = title,
+                agent = agent,
+                directory = directory?.takeIf { it.isNotBlank() },
+            ),
         ).toDomain()
         cacheSession(created)
         created
@@ -67,6 +76,19 @@ class SessionRepositoryImpl @Inject constructor(
         api.getSession(server.baseUrl, server.token, sessionId)
             .toDomain()
             .also(::cacheSession)
+    }
+
+    /**
+     * `DELETE /session/{id}`; the cache drops the row on success. A 404 is
+     * treated as success (the session is already gone server-side).
+     */
+    override suspend fun deleteSession(sessionId: String): Result<Unit> = guarded {
+        val server = requireServer()
+        runCatching { api.deleteSession(server.baseUrl, server.token, sessionId) }
+            .onFailure { failure ->
+                if ((failure as? OpenCodeHttpException)?.code != 404) throw failure
+            }
+        _sessions.update { list -> list.filterNot { it.id == sessionId } }
     }
 
     override suspend fun loadMessages(sessionId: String): Result<List<ChatMessage>> = guarded {

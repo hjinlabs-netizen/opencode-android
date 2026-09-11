@@ -7,6 +7,7 @@ import com.anomalyco.opencode.domain.repository.InteractionRepository
 import com.anomalyco.opencode.domain.repository.ModelRepository
 import com.anomalyco.opencode.domain.repository.SessionRepository
 import com.anomalyco.opencode.domain.repository.SettingsRepository
+import com.anomalyco.opencode.domain.repository.WorkspaceRepository
 import com.anomalyco.opencode.data.repository.ChatStreamRepositoryImpl
 import com.anomalyco.opencode.data.repository.ConnectionRepositoryImpl
 import com.anomalyco.opencode.data.repository.FileRepositoryImpl
@@ -14,6 +15,7 @@ import com.anomalyco.opencode.data.repository.InteractionRepositoryImpl
 import com.anomalyco.opencode.data.repository.ModelRepositoryImpl
 import com.anomalyco.opencode.data.repository.SessionRepositoryImpl
 import com.anomalyco.opencode.data.repository.SettingsRepositoryImpl
+import com.anomalyco.opencode.data.repository.WorkspaceRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -55,4 +57,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWorkspaceRepository(impl: WorkspaceRepositoryImpl): WorkspaceRepository
 }

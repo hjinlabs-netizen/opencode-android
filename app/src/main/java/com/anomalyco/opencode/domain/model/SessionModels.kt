@@ -13,6 +13,8 @@ data class Session(
     val id: String,
     val title: String = "",
     val agent: String? = null,
+    /** Server-side working directory this session operates in (Phase 5). */
+    val directory: String? = null,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
 ) {

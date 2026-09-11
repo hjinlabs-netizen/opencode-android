@@ -75,6 +75,33 @@ class SessionRequestPayloadTest {
     }
 
     @Test
+    fun `createSession with a working directory posts the qualified payload`() = runTest {
+        api.createSession(
+            "http://srv:4096",
+            "",
+            CreateSessionRequest(directory = """C:\Users\zuley\Desktop\t24"""),
+        )
+
+        val request = captured.single()
+        assertEquals(HttpMethod.Post, request.method)
+        assertEquals("/session", request.url.encodedPath)
+        assertEquals(
+            """{"directory":"C:\\Users\\zuley\\Desktop\\t24"}""",
+            request.postedJson(),
+        )
+    }
+
+    @Test
+    fun `deleteSession issues an authorized DELETE to the session path`() = runTest {
+        api.deleteSession("http://srv:4096", "tok", "s-9")
+
+        val request = captured.single()
+        assertEquals(HttpMethod.Delete, request.method)
+        assertEquals("/session/s-9", request.url.encodedPath)
+        assertEquals("Bearer tok", request.headers[HttpHeaders.Authorization])
+    }
+
+    @Test
     fun `sendPrompt never serializes a null agent`() = runTest {
         api.sendPrompt(
             "http://srv:4096",
