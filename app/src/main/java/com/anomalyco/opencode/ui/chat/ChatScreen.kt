@@ -29,12 +29,15 @@ import androidx.compose.material.icons.filled.Difference
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -42,16 +45,19 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -68,6 +74,7 @@ import com.anomalyco.opencode.domain.model.StreamStatus
 import com.anomalyco.opencode.ui.common.relativeTimeText
 import com.anomalyco.opencode.ui.theme.Success
 import com.anomalyco.opencode.ui.theme.Warning
+import kotlinx.coroutines.launch
 
 /**
  * Chat room for a single session. Renders history + live-streamed assistant
@@ -85,6 +92,12 @@ fun ChatScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val uiScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val onCodeCopied: (String) -> Unit = {
+        val message = context.getString(R.string.code_copied)
+        uiScope.launch { snackbarHostState.showSnackbar(message) }
+    }
 
     // Re-entering the screen (or returning from background) mid-turn: reconcile
     // any deltas missed while unsubscribed (P0-5).
@@ -191,14 +204,18 @@ fun ChatScreen(
                 agent = state.agent,
                 isSending = state.isSending,
                 isBusy = state.isBusy,
+                canRetry = state.lastPrompt != null && !state.isBusy && !state.isSending,
                 onInputChange = viewModel::onInputChange,
                 onAgentChange = viewModel::onAgentChange,
                 onSend = viewModel::send,
+                onAbort = viewModel::abort,
+                onRetry = viewModel::retry,
             )
         },
     ) { innerPadding ->
         MessageList(
             state = state,
+            onCodeCopied = onCodeCopied,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -240,6 +257,7 @@ fun ChatScreen(
 @Composable
 private fun MessageList(
     state: ChatUiState,
+    onCodeCopied: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -276,6 +294,7 @@ private fun MessageList(
                     message = message,
                     isLive = message.id ==
                         MessageAssembler.liveMessageId(state.sessionId) && state.isBusy,
+                    onCodeCopied = onCodeCopied,
                 )
             }
         }
@@ -283,7 +302,11 @@ private fun MessageList(
 }
 
 @Composable
-private fun MessageBubble(message: ChatMessage, isLive: Boolean) {
+private fun MessageBubble(
+    message: ChatMessage,
+    isLive: Boolean,
+    onCodeCopied: (String) -> Unit,
+) {
     val isUser = message.role == MessageRole.USER
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -309,7 +332,7 @@ private fun MessageBubble(message: ChatMessage, isLive: Boolean) {
                     TypingDots()
                 } else {
                     message.parts.forEach { part ->
-                        MessagePartCard(part)
+                        MessagePartCard(part, onCodeCopied = onCodeCopied)
                     }
                 }
             }
@@ -361,9 +384,12 @@ private fun ChatInputBar(
     agent: AgentMode,
     isSending: Boolean,
     isBusy: Boolean,
+    canRetry: Boolean,
     onInputChange: (String) -> Unit,
     onAgentChange: (AgentMode) -> Unit,
     onSend: () -> Unit,
+    onAbort: () -> Unit,
+    onRetry: () -> Unit,
 ) {
     Surface(tonalElevation = 3.dp) {
         Column(modifier = Modifier.imePadding()) {
@@ -379,6 +405,20 @@ private fun ChatInputBar(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                if (canRetry) {
+                    TextButton(onClick = onRetry) {
+                        Icon(
+                            imageVector = Icons.Filled.Replay,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = stringResource(R.string.chat_retry),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(start = 4.dp),
+                        )
+                    }
                 }
             }
             Row(
@@ -399,22 +439,46 @@ private fun ChatInputBar(
                     maxLines = 5,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 )
-                FilledIconButton(
-                    onClick = onSend,
-                    enabled = input.isNotBlank() && !isSending,
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    if (isSending) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = stringResource(R.string.action_send),
-                        )
+                if (isBusy) {
+                    // Turn controls (Sprint C): stop the running turn.
+                    FilledIconButton(
+                        onClick = onAbort,
+                        modifier = Modifier.size(48.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        ),
+                    ) {
+                        if (isSending) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.Stop,
+                                contentDescription = stringResource(R.string.chat_abort),
+                            )
+                        }
+                    }
+                } else {
+                    FilledIconButton(
+                        onClick = onSend,
+                        enabled = input.isNotBlank() && !isSending,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        if (isSending) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = stringResource(R.string.action_send),
+                            )
+                        }
                     }
                 }
             }

@@ -10,6 +10,7 @@ import com.anomalyco.opencode.data.remote.dto.FileListWrapperDto
 import com.anomalyco.opencode.data.remote.dto.FileNodeDto
 import com.anomalyco.opencode.data.remote.requireActiveServer
 import com.anomalyco.opencode.data.remote.toFriendlyApiException
+import com.anomalyco.opencode.di.ApplicationScope
 import com.anomalyco.opencode.domain.model.DiffStatus
 import com.anomalyco.opencode.domain.model.FileContent
 import com.anomalyco.opencode.domain.model.FileDiff
@@ -17,12 +18,16 @@ import com.anomalyco.opencode.domain.model.FileNode
 import com.anomalyco.opencode.domain.model.ServerConfig
 import com.anomalyco.opencode.domain.repository.ConnectionRepository
 import com.anomalyco.opencode.domain.repository.FileRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -47,17 +52,36 @@ class FileRepositoryImpl @Inject constructor(
     private val api: OpenCodeApi,
     private val connectionRepository: ConnectionRepository,
     private val json: Json,
+    @ApplicationScope scope: CoroutineScope,
 ) : FileRepository {
+
+    /**
+     * P2-2: winning endpoint per `baseUrl|operation`. Keyed by base URL so a
+     * server switch is naturally isolated; additionally cleared whenever the
+     * active server configuration changes (see [init]).
+     */
+    private val endpointCache = ConcurrentHashMap<String, String>()
+
+    init {
+        // Invalidate the probe cache on ANY server configuration change (URL
+        // or token swap = different/restarted deployment) so endpoint layout
+        // is rediscovered from scratch.
+        scope.launch {
+            connectionRepository.config
+                .distinctUntilChanged()
+                .collect { endpointCache.clear() }
+        }
+    }
 
     override suspend fun listDirectory(path: String): Result<List<FileNode>> = guarded {
         val server = connectionRepository.requireActiveServer()
-        val element = firstUsableJson(server, LIST_ENDPOINTS, path)
+        val element = firstUsableJson(server, LIST_ENDPOINTS, path, OP_LIST)
         decodeNodes(element, path)
     }
 
     override suspend fun readFile(path: String): Result<FileContent> = guarded {
         val server = connectionRepository.requireActiveServer()
-        val element = firstUsableJson(server, READ_ENDPOINTS, path)
+        val element = firstUsableJson(server, READ_ENDPOINTS, path, OP_READ)
         if (element !is JsonObject) {
             throw IllegalStateException("Dosya içeriği okunamadı: $path")
         }
@@ -66,7 +90,7 @@ class FileRepositoryImpl @Inject constructor(
 
     override suspend fun diffFile(path: String): Result<FileDiff> = guarded {
         val server = connectionRepository.requireActiveServer()
-        val rows = decodeDiffs(firstUsableJson(server, DIFF_ENDPOINTS, path))
+        val rows = decodeDiffs(firstUsableJson(server, DIFF_ENDPOINTS, path, OP_DIFF))
         rows.firstOrNull { it.path == path }
             ?: rows.firstOrNull()
             ?: throw IllegalStateException("Bu dosya için değişiklik bulunamadı: $path")
@@ -81,7 +105,7 @@ class FileRepositoryImpl @Inject constructor(
     override suspend fun workingTreeDiff(): Result<List<FileDiff>> =
         runCatching {
             val server = connectionRepository.requireActiveServer()
-            decodeDiffs(firstUsableJson(server, DIFF_ENDPOINTS, path = null))
+            decodeDiffs(firstUsableJson(server, DIFF_ENDPOINTS, path = null, operation = OP_DIFF))
                 .filter { it.hunks.isNotEmpty() || it.status != DiffStatus.UNCHANGED }
         }.recoverCatching { failure ->
             if (isEndpointMiss(failure)) emptyList() else throw failure.toFriendlyApiException()
@@ -96,10 +120,12 @@ class FileRepositoryImpl @Inject constructor(
         server: ServerConfig,
         endpoints: List<Endpoint>,
         path: String?,
+        operation: String,
     ): JsonElement {
+        val cacheKey = "${server.baseUrl}|$operation"
         var lastError: Throwable =
             IllegalStateException("Dosya uç noktaları yanıt vermedi: ${endpoints.joinToString { it.path }}")
-        for (endpoint in endpoints) {
+        for (endpoint in orderedCandidates(server.baseUrl, endpoints, operation)) {
             val query = when {
                 !path.isNullOrBlank() -> mapOf("path" to path)
                 endpoint.blankPathDefault != null -> mapOf("path" to endpoint.blankPathDefault)
@@ -107,12 +133,31 @@ class FileRepositoryImpl @Inject constructor(
             }
             val attempt = runCatching { api.getJson(server.baseUrl, server.token, endpoint.path, query) }
             val error = attempt.exceptionOrNull()
-            if (error == null) return attempt.getOrThrow()
+            if (error == null) {
+                endpointCache[cacheKey] = endpoint.path
+                return attempt.getOrThrow()
+            }
             if (!isEndpointMiss(error)) throw error // auth/network: fail fast, no probing
+            // A cached winner that just failed is no longer trusted.
+            if (endpointCache[cacheKey] == endpoint.path) endpointCache.remove(cacheKey)
             lastError = error
         }
         throw lastError
     }
+
+    /** Cached winner first, then the declared candidates (P2-2). */
+    private fun orderedCandidates(baseUrl: String, endpoints: List<Endpoint>, operation: String): List<Endpoint> {
+        val winner = endpointCache["$baseUrl|$operation"] ?: return endpoints
+        val first = endpoints.firstOrNull { it.path == winner } ?: return endpoints
+        return listOf(first) + endpoints.filter { it != first }
+    }
+
+    /** Exposed for tests: current winning path for a base URL + operation. */
+    internal fun cachedEndpoint(baseUrl: String, operation: String): String? =
+        endpointCache["$baseUrl|$operation"]
+
+    /** Exposed for tests: drop all memoized winners. */
+    internal fun invalidateEndpointCache() = endpointCache.clear()
 
     /**
      * "Wrong endpoint" signals that justify trying the next candidate:
@@ -163,6 +208,10 @@ class FileRepositoryImpl @Inject constructor(
             .recoverCatching { throw it.toFriendlyApiException() }
 
     private companion object {
+        const val OP_LIST = "list"
+        const val OP_READ = "read"
+        const val OP_DIFF = "diff"
+
         val LIST_ENDPOINTS = listOf(
             Endpoint("/fs/list"),
             Endpoint("/find", blankPathDefault = "."),

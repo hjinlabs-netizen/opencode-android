@@ -22,7 +22,9 @@ import kotlinx.serialization.json.Json
 class FakeConnectionRepository(
     server: ServerConfig? = ServerConfig("http://srv:4096/", "tok"),
 ) : ConnectionRepository {
-    override val config: Flow<ServerConfig?> = MutableStateFlow(server)
+    /** Public so tests can simulate server config changes. */
+    val configFlow = MutableStateFlow(server)
+    override val config: Flow<ServerConfig?> = configFlow
     override suspend fun saveConfig(config: ServerConfig) = Unit
     override suspend fun clearConfig() = Unit
     override suspend fun checkHealth(config: ServerConfig): Result<HealthInfo> =

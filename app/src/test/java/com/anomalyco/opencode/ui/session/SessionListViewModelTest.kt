@@ -61,6 +61,8 @@ private class Fake : SessionRepository {
     override suspend fun loadMessages(sessionId: String) = Result.success(emptyList<ChatMessage>())
     override suspend fun sendPrompt(sessionId: String, text: String, agent: String?) =
         Result.success(ChatMessage(id = "m", sessionId = sessionId))
+
+    override suspend fun abortSession(sessionId: String) = Result.success(Unit)
 }
 
 private class FakeWorkspace : WorkspaceRepository {

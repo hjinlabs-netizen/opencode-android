@@ -107,6 +107,11 @@ class SessionRepositoryImpl @Inject constructor(
         ).toDomain()
     }
 
+    override suspend fun abortSession(sessionId: String): Result<Unit> = guarded {
+        val server = requireServer()
+        api.abortSession(server.baseUrl, server.token, sessionId)
+    }
+
     private suspend fun requireServer() = connectionRepository.requireActiveServer()
 
     private fun cacheSession(session: Session) {

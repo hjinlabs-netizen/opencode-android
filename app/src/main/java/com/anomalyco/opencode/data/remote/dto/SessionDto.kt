@@ -58,3 +58,7 @@ data class CreateSessionRequest(
     val agent: String? = null,
     val directory: String? = null,
 )
+
+/** Empty `{}` body for action endpoints such as `POST /session/{id}/abort`. */
+@Serializable
+class EmptyBodyDto

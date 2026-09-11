@@ -65,9 +65,10 @@ import com.anomalyco.opencode.ui.theme.Warning
 fun MessagePartCard(
     part: MessagePart,
     modifier: Modifier = Modifier,
+    onCodeCopied: (String) -> Unit = {},
 ) {
     when (part) {
-        is MessagePart.TextPart -> TextPartCard(part, modifier)
+        is MessagePart.TextPart -> TextPartCard(part, modifier, onCodeCopied)
         is MessagePart.ReasoningPart -> ReasoningPartCard(part, modifier)
         is MessagePart.ToolCallPart -> ToolCallPartCard(part, modifier)
         is MessagePart.ShellPart -> ShellPartCard(part, modifier)
@@ -78,9 +79,13 @@ fun MessagePartCard(
 // ---- Text ------------------------------------------------------------------
 
 @Composable
-fun TextPartCard(part: MessagePart.TextPart, modifier: Modifier = Modifier) {
+fun TextPartCard(
+    part: MessagePart.TextPart,
+    modifier: Modifier = Modifier,
+    onCodeCopied: (String) -> Unit = {},
+) {
     if (part.content.isEmpty()) return
-    MarkdownText(text = part.content, modifier = modifier.fillMaxWidth())
+    MarkdownText(text = part.content, modifier = modifier.fillMaxWidth(), onCodeCopied = onCodeCopied)
 }
 
 // ---- Reasoning (collapsible "thinking") ------------------------------------

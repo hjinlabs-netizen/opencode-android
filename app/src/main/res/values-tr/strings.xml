@@ -69,6 +69,9 @@
     <string name="chat_pending_requests">Bekleyen istekler</string>
     <string name="chat_input_hint">Mesaj yazın…</string>
     <string name="chat_model_working">Model çalışıyor…</string>
+    <string name="chat_abort">İptal Et</string>
+    <string name="chat_retry">Tekrar Dene</string>
+    <string name="chat_aborted">Tur durduruldu</string>
     <string name="chat_role_you">Sen</string>
     <string name="chat_role_assistant">Asistan</string>
     <string name="chat_typing">Yanıtlanıyor…</string>
@@ -83,6 +86,9 @@
     <string name="part_expand">Genişlet</string>
     <string name="part_arguments">Argümanlar</string>
     <string name="part_step_default">Adım</string>
+    <string name="code_copy">Kopyala</string>
+    <string name="code_copied">Panoya kopyalandı</string>
+    <string name="code_language_plain">metin</string>
     <string name="status_pending">Bekliyor</string>
     <string name="status_running">Çalışıyor</string>
     <string name="status_completed">Tamamlandı</string>

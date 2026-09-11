@@ -71,4 +71,28 @@ class MarkdownParserTest {
     fun `empty source yields no blocks`() {
         assertEquals(emptyList<MdBlock>(), parseMarkdownBlocks(""))
     }
+
+    @Test
+    fun `fence info string becomes the code block language`() {
+        val blocks = parseMarkdownBlocks("```kotlin\nval x = 1\n```")
+        assertEquals(MdBlock.Code("val x = 1", language = "kotlin"), blocks.single())
+    }
+
+    @Test
+    fun `bare fence has no language and info args are trimmed to first word`() {
+        assertEquals(
+            MdBlock.Code("x", language = null),
+            parseMarkdownBlocks("```\nx\n```").single(),
+        )
+        assertEquals(
+            MdBlock.Code("x", language = "powershell"),
+            parseMarkdownBlocks("```powershell title=1\nx\n```").single(),
+        )
+    }
+
+    @Test
+    fun `unclosed fence still reports its language`() {
+        val blocks = parseMarkdownBlocks("intro\n```json\n{}")
+        assertEquals(MdBlock.Code("{}", language = "json"), blocks[1])
+    }
 }

@@ -26,7 +26,10 @@
 > **Sprint A status:** P0-1 ✅ · P0-2 ✅ · P0-3 ✅ · P0-5 ✅ · directory pre-validation ✅.
 > **Sprint B status:** P0-4 ✅ (tail-buffer key fallback) · P0-7 ✅ (X-of-Y delete report) ·
 > i18n ✅ (en + tr) · file-explorer search ✅ · diff expand/collapse-all ✅.
-> **Still open:** P0-6 (instrumentation/SSE device tests) · §5 CI + lint · endpoint probe caching (P2-2).
+> **Sprint C status:** turn controls ✅ (abort `POST /session/{id}/abort` + retry) ·
+> endpoint probe caching ✅ (P2-2, per `baseUrl|operation`, invalidated on config change) ·
+> code-block copy + language badge ✅.
+> **Still open:** P0-6 (instrumentation/SSE device tests) · §5 CI + lint.
 
 1. **[RESOLVED] Server-resolution inconsistency (cold-start race).**
    `SessionRepositoryImpl` now resolves through the shared
@@ -102,9 +105,10 @@
 1. **Compose recomposition scopes**: `MessageList` runs `messages.asReversed()` + the tail-length
    sum on every token; wrap in `remember(state.messages)` and pass minimal lambdas. Add
    `contentType` to the chat `LazyColumn` items (bubble vs step vs tool rows) for view-type reuse.
-2. **Endpoint-probe caching**: file ops re-probe 4 candidates per call on servers missing `/fs/*`;
-   memoize the winning endpoint per `baseUrl` (in-memory + persisted) — halves round-trips on
-   slow LANs.
+ 2. **[RESOLVED Sprint C] Endpoint-probe caching**: `FileRepositoryImpl` now
+    memoizes the winning endpoint per `baseUrl|operation` (list/read/diff), clears
+    the cache on any server-config change, and demotes a cached winner that starts
+    failing — routine browsing is a single request.
 3. **Baseline profile**: generate one (`androidx.baselineprofile` plugin + macrobenchmark) —
    Compose + Ktor startup paths dominate cold start on low-end devices.
 4. **Coroutine cancellation**: `ChatViewModel` collectors live on `viewModelScope` (correct), but
@@ -125,13 +129,15 @@
 
 - **Offline mode**: Room cache of sessions + transcripts, last-known-state banner, queued prompts
   with send-state indicators, sync-on-reconnect.
-- **Code rendering**: syntax-highlighted file preview & diff (tree-sitter wasm or a tokenizer lib),
-  copy buttons, fenced-code cards inside markdown.
+- **Code rendering**: ✅ copy button + language badge on fenced code blocks
+  (Sprint C). Remaining: syntax-highlighted file preview & diff (tree-sitter wasm
+  or a tokenizer lib).
 - **Session export/import**: share transcript as Markdown/JSON, import as a new session context.
 - **Agent permissions workflow**: persistent rule editor ("allow edit under `src/**`"), permission
   profiles per workspace, audit log of granted/denied decisions.
-- **Turn controls**: cancel running turn (`POST /session/{id}/abort`), retry last prompt,
-  regenerate, per-message copy, token/cost meter from `step-finish` data.
+- **Turn controls**: ✅ abort running turn (`POST /session/{id}/abort`) and retry
+  last prompt shipped in Sprint C. Remaining: per-message copy, regenerate,
+  token/cost meter from `step-finish` data.
 - **Workspaces UX**: directory picker over `/find` browsing (instead of typed path), pinned
   favorites, per-directory model defaults.
 - **Notifications**: long-turn completion notification (WorkManager poll or push relay) when the
@@ -172,5 +178,6 @@
 **Sprint A (correctness):** ✅ DONE — P0-1, P0-2, P0-3, P0-5, directory pre-validation
 (P1) shipped with tests; §5 CI + lint still pending.
 **Sprint B (polish):** P1 items (i18n extraction first), P0-4/P0-7, endpoint probe caching (P2-2).
-**Sprint C (capability):** offline cache (Room), turn controls (abort/retry), notifications.
+**Sprint C (capability):** ✅ turn controls (abort/retry), ✅ endpoint probe caching,
+✅ code copy — remaining: offline cache (Room), notifications.
 **Sprint D (reach):** tablet scenes, multi-server/discovery, release hardening (§6).

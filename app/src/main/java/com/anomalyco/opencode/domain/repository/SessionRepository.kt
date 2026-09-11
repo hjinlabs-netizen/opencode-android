@@ -45,4 +45,11 @@ interface SessionRepository {
      * [agent] optionally selects the driving agent (e.g. "build" or "plan").
      */
     suspend fun sendPrompt(sessionId: String, text: String, agent: String? = null): Result<ChatMessage>
+
+    /**
+     * Abort the session's currently running turn (`POST /session/{id}/abort`).
+     * The server stops tool execution/token generation; the resulting partial
+     * transcript is reconciled by the caller via [loadMessages].
+     */
+    suspend fun abortSession(sessionId: String): Result<Unit>
 }

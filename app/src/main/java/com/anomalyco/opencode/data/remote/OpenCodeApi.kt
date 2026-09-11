@@ -3,6 +3,7 @@ package com.anomalyco.opencode.data.remote
 import com.anomalyco.opencode.data.remote.dto.ConfigDto
 import com.anomalyco.opencode.data.remote.dto.ConfigPatchDto
 import com.anomalyco.opencode.data.remote.dto.CreateSessionRequest
+import com.anomalyco.opencode.data.remote.dto.EmptyBodyDto
 import com.anomalyco.opencode.data.remote.dto.MessageDto
 import com.anomalyco.opencode.data.remote.dto.MessageInfoDto
 import com.anomalyco.opencode.data.remote.dto.PermissionResponseRequest
@@ -139,6 +140,22 @@ class OpenCodeApi @Inject constructor(
             .recoverCatching { MessageDto(info = response.body<MessageInfoDto>()) }
             .getOrElse { MessageDto() }
     }
+
+    /**
+     * `POST /session/{id}/abort` — cancel the session's currently running
+     * turn (tool executions and token generation). The response body is
+     * irrelevant; success is the 2xx status itself.
+     */
+    suspend fun abortSession(
+        baseUrl: String,
+        token: String,
+        sessionId: String,
+    ): Unit = authorizedPost(
+        baseUrl,
+        token,
+        "$SESSIONS_PATH/$sessionId/abort",
+        EmptyBodyDto(),
+    ).let { }
 
     /**
      * `POST /permission/{requestId}` — resolve a pending permission request

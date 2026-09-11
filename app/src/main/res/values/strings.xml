@@ -78,6 +78,9 @@
     <string name="chat_pending_requests">Pending requests</string>
     <string name="chat_input_hint">Type a message…</string>
     <string name="chat_model_working">Model is working…</string>
+    <string name="chat_abort">Abort</string>
+    <string name="chat_retry">Retry</string>
+    <string name="chat_aborted">Turn cancelled</string>
     <string name="chat_role_you">You</string>
     <string name="chat_role_assistant">Assistant</string>
     <string name="chat_typing">Answering…</string>
@@ -92,6 +95,9 @@
     <string name="part_expand">Expand</string>
     <string name="part_arguments">Arguments</string>
     <string name="part_step_default">Step</string>
+    <string name="code_copy">Copy</string>
+    <string name="code_copied">Copied to clipboard</string>
+    <string name="code_language_plain">text</string>
     <string name="status_pending">Pending</string>
     <string name="status_running">Running</string>
     <string name="status_completed">Completed</string>

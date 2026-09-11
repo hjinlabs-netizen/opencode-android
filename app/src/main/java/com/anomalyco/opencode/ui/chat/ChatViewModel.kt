@@ -79,6 +79,8 @@ data class ChatUiState(
     val isLoadingProviders: Boolean = false,
     val isModelPickerOpen: Boolean = false,
     val switchingModelId: String? = null,
+    /** Text of the most recent prompt; enables the retry affordance (Sprint C). */
+    val lastPrompt: String? = null,
     val error: String? = null,
 )
 /**
@@ -275,6 +277,7 @@ class ChatViewModel @Inject constructor(
                 input = "",
                 isSending = true,
                 isBusy = true,
+                lastPrompt = text,
             )
         }
         viewModelScope.launch {
@@ -316,6 +319,30 @@ class ChatViewModel @Inject constructor(
             _uiState.update { it.copy(isBusy = false) }
             syncTranscriptFromServer(myTurn)
         }
+    }
+
+    /**
+     * Abort the running turn (Sprint C). Bumps the turn token so the still
+     * in-flight end-of-turn `sendPrompt` long-poll cannot re-arm busy state
+     * or re-sync over the reconciled transcript, then settles and reconciles.
+     */
+    fun abort() {
+        if (!_uiState.value.isBusy) return
+        val token = ++turnToken
+        viewModelScope.launch {
+            sessionRepository.abortSession(sessionId)
+                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+            _uiState.update { it.copy(isBusy = false, isSending = false) }
+            syncTranscriptFromServer(token)
+        }
+    }
+
+    /** Re-dispatch the most recent prompt as a fresh turn. */
+    fun retry() {
+        val prompt = _uiState.value.lastPrompt ?: return
+        if (_uiState.value.isBusy || _uiState.value.isSending) return
+        _uiState.update { it.copy(input = prompt) }
+        send()
     }
 
     /**

@@ -3,31 +3,39 @@ package com.anomalyco.opencode.data.repository
 import com.anomalyco.opencode.data.remote.OpenCodeApi
 import com.anomalyco.opencode.domain.model.DiffStatus
 import com.anomalyco.opencode.domain.model.FileNode
+import com.anomalyco.opencode.domain.model.ServerConfig
 import com.anomalyco.opencode.util.FakeConnectionRepository
 import com.anomalyco.opencode.util.MockResponse
 import com.anomalyco.opencode.util.recordingClient
 import com.anomalyco.opencode.util.testJson
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * File endpoint wiring: candidate-path fallback (`/fs` routes -> `/file`,
  * `/fs/diff` -> `/vcs/diff`), non-JSON (SPA HTML) degradation, query
- * parameter omission and unified-diff parsing of server patch text.
+ * parameter omission, endpoint probe caching (P2-2) and unified-diff parsing.
  */
 class FileRepositoryImplTest {
 
     private val captured = mutableListOf<HttpRequestData>()
 
-    private fun repository(script: (HttpRequestData) -> MockResponse) = FileRepositoryImpl(
+    private fun repository(
+        connection: FakeConnectionRepository = FakeConnectionRepository(),
+        script: (HttpRequestData) -> MockResponse,
+    ) = FileRepositoryImpl(
         OpenCodeApi(recordingClient(captured, script), testJson()),
-        FakeConnectionRepository(),
+        connection,
         testJson(),
+        CoroutineScope(UnconfinedTestDispatcher()),
     )
 
     private val html = MockResponse(
@@ -250,11 +258,94 @@ class FileRepositoryImplTest {
             OpenCodeApi(recordingClient(captured) { MockResponse() }, testJson()),
             FakeConnectionRepository(server = null),
             testJson(),
+            CoroutineScope(UnconfinedTestDispatcher()),
         )
         // requireActiveServer waits 3s (virtual time advances in runTest) then throws.
         val result = repo.listDirectory("")
 
         assertTrue(result.isFailure)
         assertTrue(captured.isEmpty())
+    }
+
+    // ---- endpoint probe caching (Sprint C, P2-2) ----------------------------
+
+    private val listScript: (HttpRequestData) -> MockResponse = { request ->
+        when (pathOf(request)) {
+            "/fs/list" -> html // SPA fallback: miss
+            else -> MockResponse(body = """[{"name":"a.kt","type":"file","path":"a.kt"}]""")
+        }
+    }
+
+    @Test
+    fun `winning endpoint is memoized so routine browsing skips re-probing`() = runTest {
+        val repo = repository(script = listScript)
+
+        repo.listDirectory("x")
+        assertEquals(listOf("/fs/list", "/find"), captured.map(::pathOf))
+        assertEquals("/find", repo.cachedEndpoint("http://srv:4096", "list"))
+
+        captured.clear()
+        repo.listDirectory("y")
+        repo.listDirectory("z")
+        // One request per call, straight at the winner.
+        assertEquals(listOf("/find", "/find"), captured.map(::pathOf))
+    }
+
+    @Test
+    fun `list read and diff winners are cached independently`() = runTest {
+        val repo = repository { request ->
+            when (pathOf(request)) {
+                "/fs/list", "/fs/read", "/fs/diff" -> html
+                "/file" -> MockResponse(body = """{"content":"x"}""")
+                "/find", "/file/find" -> MockResponse(body = "[]")
+                else -> MockResponse(body = "[]")
+            }
+        }
+        repo.listDirectory("a")
+        repo.readFile("a.kt")
+        repo.workingTreeDiff()
+
+        assertEquals("/find", repo.cachedEndpoint("http://srv:4096", "list"))
+        assertEquals("/file", repo.cachedEndpoint("http://srv:4096", "read"))
+        assertEquals("/vcs/diff", repo.cachedEndpoint("http://srv:4096", "diff"))
+    }
+
+    @Test
+    fun `changing server configuration invalidates the endpoint cache`() = runTest {
+        val connection = FakeConnectionRepository()
+        val repo = repository(connection = connection, script = listScript)
+        repo.listDirectory("x")
+        assertEquals("/find", repo.cachedEndpoint("http://srv:4096", "list"))
+
+        // Same URL, different token (server swapped behind the address).
+        connection.configFlow.value = ServerConfig("http://srv:4096/", "tok2")
+
+        assertNull(repo.cachedEndpoint("http://srv:4096", "list"))
+        captured.clear()
+        repo.listDirectory("y")
+        // Full re-probe after invalidation.
+        assertEquals(listOf("/fs/list", "/find"), captured.map(::pathOf))
+    }
+
+    @Test
+    fun `a cached winner that starts failing is demoted and re-probed`() = runTest {
+        var fsListWorks = true
+        val repo = repository { request ->
+            when {
+                pathOf(request) == "/fs/list" && fsListWorks ->
+                    MockResponse(body = """[{"name":"a.kt","type":"file","path":"a.kt"}]""")
+                pathOf(request) == "/fs/list" -> html
+                else -> MockResponse(body = "[]")
+            }
+        }
+        repo.listDirectory("x") // winner = /fs/list
+        assertEquals("/fs/list", repo.cachedEndpoint("http://srv:4096", "list"))
+
+        fsListWorks = false // server updated and lost the route
+        captured.clear()
+        repo.listDirectory("y")
+
+        assertEquals(listOf("/fs/list", "/find"), captured.map(::pathOf))
+        assertEquals("/find", repo.cachedEndpoint("http://srv:4096", "list"))
     }
 }

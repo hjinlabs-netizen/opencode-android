@@ -43,6 +43,7 @@ private class FakeSessionRepository : SessionRepository {
         Result.success(ChatMessage(id = "server-user", sessionId = "s1", role = MessageRole.USER))
     }
     var lastPrompt: Pair<String, String?>? = null
+    var promptCount = 0
 
     /** When set, sendPrompt suspends until this gate completes (tests the optimistic state). */
     var sendGate: CompletableDeferred<Unit>? = null
@@ -58,8 +59,16 @@ private class FakeSessionRepository : SessionRepository {
     }
     override suspend fun sendPrompt(sessionId: String, text: String, agent: String?): Result<ChatMessage> {
         lastPrompt = text to agent
+        promptCount++
         sendGate?.await()
         return sendResult(text)
+    }
+
+    val aborted = mutableListOf<String>()
+    var abortResult: Result<Unit> = Result.success(Unit)
+    override suspend fun abortSession(sessionId: String): Result<Unit> {
+        aborted += sessionId
+        return abortResult
     }
 }
 
@@ -800,5 +809,111 @@ class ChatViewModelTest {
         vm.onResume()
         advanceUntilIdle()
         assertTrue(sessions.loadCalls > baseline)
+    }
+
+    // ---- Sprint C: turn controls (abort / retry) -----------------------------
+
+    @Test
+    fun `abort posts the server abort and settles busy state`() = runTest {
+        val (vm, sessions, stream) = build()
+        advanceUntilIdle()
+        sessions.sendGate = CompletableDeferred() // long poll stays open
+        vm.onInputChange("calisir misin")
+        vm.send()
+        stream.push(StreamEvent.TextDelta("s1", "p1", "u"))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.isBusy)
+
+        vm.abort()
+        advanceUntilIdle()
+
+        assertEquals(listOf("s1"), sessions.aborted)
+        assertFalse(vm.uiState.value.isBusy)
+        assertFalse(vm.uiState.value.isSending)
+    }
+
+    @Test
+    fun `abort while idle is a no-op`() = runTest {
+        val (vm, sessions) = build()
+        advanceUntilIdle()
+
+        vm.abort()
+        advanceUntilIdle()
+
+        assertTrue(sessions.aborted.isEmpty())
+    }
+
+    @Test
+    fun `late long-poll resolution after an abort cannot re-arm busy state`() = runTest {
+        val (vm, sessions, stream) = build()
+        advanceUntilIdle()
+        val gate = CompletableDeferred<Unit>()
+        sessions.sendGate = gate
+        vm.onInputChange("merhaba")
+        vm.send()
+        stream.push(StreamEvent.TextDelta("s1", "p1", "cevap"))
+        advanceUntilIdle()
+
+        vm.abort()
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.isBusy)
+
+        // The abandoned POST finally resolves; the token guard must ignore it.
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.isBusy)
+    }
+
+    @Test
+    fun `abort failure surfaces the error but still settles the UI`() = runTest {
+        val (vm, sessions, stream) = build()
+        advanceUntilIdle()
+        sessions.sendGate = CompletableDeferred()
+        vm.onInputChange("x")
+        vm.send()
+        stream.push(StreamEvent.TextDelta("s1", "p1", "y"))
+        advanceUntilIdle()
+        sessions.abortResult = Result.failure(Exception("sunucu reddetti"))
+
+        vm.abort()
+        advanceUntilIdle()
+
+        assertEquals("sunucu reddetti", vm.uiState.value.error)
+        assertFalse(vm.uiState.value.isBusy)
+    }
+
+    @Test
+    fun `retry re-dispatches the last prompt as a fresh turn`() = runTest {
+        val (vm, sessions, stream) = build()
+        advanceUntilIdle()
+        vm.onInputChange("ilki")
+        vm.send()
+        advanceUntilIdle()
+        assertEquals(1, sessions.promptCount)
+        stream.push(StreamEvent.SessionIdle("s1"))
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.isBusy)
+        assertEquals("ilki", vm.uiState.value.lastPrompt)
+
+        sessions.sendGate = CompletableDeferred() // keep the retried turn in flight
+        vm.retry()
+        advanceUntilIdle()
+
+        assertEquals(2, sessions.promptCount)
+        assertEquals("ilki", sessions.lastPrompt?.first)
+        assertTrue(vm.uiState.value.isBusy)
+        assertEquals("", vm.uiState.value.input)
+    }
+
+    @Test
+    fun `retry without a previous prompt is a no-op`() = runTest {
+        val (vm, sessions) = build()
+        advanceUntilIdle()
+
+        vm.retry()
+        advanceUntilIdle()
+
+        assertNull(sessions.lastPrompt)
+        assertFalse(vm.uiState.value.isBusy)
     }
 }

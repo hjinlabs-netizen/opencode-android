@@ -102,6 +102,17 @@ class SessionRequestPayloadTest {
     }
 
     @Test
+    fun `abortSession posts an empty object to the abort path`() = runTest {
+        api.abortSession("http://srv:4096", "tok", "s-9")
+
+        val request = captured.single()
+        assertEquals(HttpMethod.Post, request.method)
+        assertEquals("/session/s-9/abort", request.url.encodedPath)
+        assertEquals("Bearer tok", request.headers[HttpHeaders.Authorization])
+        assertEquals("{}", request.postedJson())
+    }
+
+    @Test
     fun `sendPrompt never serializes a null agent`() = runTest {
         api.sendPrompt(
             "http://srv:4096",
