@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.data.remote.stream
 
+import com.anomalyco.opencode.data.remote.infiniteTimeouts
 import com.anomalyco.opencode.domain.model.ServerConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.sse.sseSession
@@ -19,7 +20,8 @@ import javax.inject.Singleton
  *
  * Long-lived stream caveat: the shared client's global HttpTimeout would kill
  * an idle SSE connection, so this request opts out of request/socket timeouts
- * (`0` = infinite) while keeping the connect timeout. Server keep-alive
+ * (`HttpTimeoutConfig.INFINITE_TIMEOUT_MS`) while keeping the connect
+ * timeout. Server keep-alive
  * comments (`:` frames) carry no `data` and are filtered out here.
  */
 @Singleton
@@ -38,11 +40,10 @@ class SseEventTransport @Inject constructor(
                 header(HttpHeaders.Authorization, "Bearer ${config.token}")
             }
             // Unlimited total request & socket inactivity timeouts:
-            // the event stream is expected to stay open indefinitely.
-            timeout {
-                requestTimeoutMillis = INFINITE_TIMEOUT
-                socketTimeoutMillis = INFINITE_TIMEOUT
-            }
+            // the event stream is expected to stay open indefinitely
+            // (HttpTimeoutConfig rejects 0; infinite is its MAX_VALUE
+            // sentinel — see data/remote/Timeouts.kt).
+            timeout(infiniteTimeouts)
         }
         // `sseSession` returns once the server accepted the request with a
         // 2xx response — the SSE handshake. Flip the supervisor to Connected
@@ -62,6 +63,5 @@ class SseEventTransport @Inject constructor(
 
     private companion object {
         const val EVENT_PATH = "/event"
-        const val INFINITE_TIMEOUT = 0L
     }
 }

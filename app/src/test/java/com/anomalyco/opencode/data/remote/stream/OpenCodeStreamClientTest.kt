@@ -193,6 +193,31 @@ class OpenCodeStreamClientTest {
     }
 
     @Test
+    fun `keep-alive and unknown frames do not reconnect or flap status`() = runTest {
+        var calls = 0
+        val transport = object : EventTransport {
+            override fun frames(config: ServerConfig, onConnected: () -> Unit): Flow<String> = flow {
+                calls++
+                onConnected()
+                // Heartbeat-style frames the decoder maps to Unknown.
+                emit("""{"type":"ping"}""")
+                emit("""{"type":"server.heartbeat","properties":{}}""")
+                awaitCancellation()
+            }
+        }
+        val client = clientFor(transport, backgroundScope)
+        client.start(config)
+
+        // Long virtual-time run: no data events, only keep-alives.
+        advanceTimeBy(5 * 60_000)
+        runCurrent()
+
+        assertEquals(1, calls)
+        assertEquals(StreamStatus.Connected, client.status.value)
+        client.stop()
+    }
+
+    @Test
     fun `backoff ladder doubles, caps at 30s and jitters up to 25 percent`() {
         assertEquals(1_000L, OpenCodeStreamClient.computeBackoffDelay(0, 0.0))
         assertEquals(2_000L, OpenCodeStreamClient.computeBackoffDelay(1, 0.0))

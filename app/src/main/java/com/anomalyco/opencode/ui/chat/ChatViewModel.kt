@@ -252,14 +252,15 @@ class ChatViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
-            sessionRepository.sendPrompt(sessionId, text, agent = state.agent.wireName)
+            val outcome =
+                sessionRepository.sendPrompt(sessionId, text, agent = state.agent.wireName)
+            outcome
                 .onSuccess { serverMessage ->
                     _uiState.update { current ->
                         current.copy(
                             // Swap in the server row only when it carries an
                             // id; an unrecognised response shape keeps the
-                            // optimistic bubble visible (history refresh will
-                            // reconcile it later) instead of blanking it.
+                            // optimistic bubble visible until history sync.
                             messages = current.messages.map {
                                 if (it.id == optimisticId && serverMessage.id.isNotBlank()) {
                                     serverMessage
@@ -285,6 +286,30 @@ class ChatViewModel @Inject constructor(
                         )
                     }
                 }
+            // The long poll resolving means the turn is over server-side, no
+            // matter the outcome: end the busy state and reconcile the
+            // transcript with the authoritative history. The live bubble is
+            // dropped (its content is now persisted) unless a new turn has
+            // already begun streaming.
+            _uiState.update { it.copy(isBusy = false) }
+            syncTranscriptFromServer()
+        }
+    }
+
+    private suspend fun syncTranscriptFromServer() {
+        sessionRepository.loadMessages(sessionId).onSuccess { history ->
+            if (history.isEmpty()) return@onSuccess // never blank a live transcript
+            _uiState.update { current ->
+                val live =
+                    if (current.isBusy) {
+                        current.messages.firstOrNull {
+                            it.id == MessageAssembler.liveMessageId(sessionId)
+                        }
+                    } else {
+                        null
+                    }
+                current.copy(messages = history + listOfNotNull(live))
+            }
         }
     }
 

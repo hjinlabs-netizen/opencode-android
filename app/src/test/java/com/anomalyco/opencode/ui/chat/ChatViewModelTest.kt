@@ -347,6 +347,52 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `turn completion reconciles the live bubble into history without duplicates`() = runTest {
+        val (vm, sessions, stream) = build(history = listOf(assistant("m1")))
+        advanceUntilIdle()
+        val gate = CompletableDeferred<Unit>()
+        sessions.sendGate = gate
+
+        vm.onInputChange("go")
+        vm.send()
+        stream.push(StreamEvent.TextDelta("s1", "p1", "partial answer"))
+        advanceUntilIdle()
+        // m1 + optimistic user + live bubble
+        assertEquals(3, vm.uiState.value.messages.size)
+        assertTrue(vm.uiState.value.isBusy)
+
+        // The long poll resolves: the server has persisted the full turn.
+        sessions.history = listOf(assistant("m1"), assistant("a-final"))
+        sessions.sendResult = {
+            Result.success(ChatMessage(id = "srv-user", sessionId = "s1", role = MessageRole.USER))
+        }
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        // Live bubble is dropped in favour of the authoritative rows (no dupes),
+        // busy settles even if the session.idle event was missed.
+        assertEquals(listOf("m1", "a-final"), vm.uiState.value.messages.map { it.id })
+        assertFalse(vm.uiState.value.isBusy)
+    }
+
+    @Test
+    fun `second send is ignored while the long-poll prompt is still in flight`() = runTest {
+        val (vm, sessions, _) = build()
+        advanceUntilIdle()
+        sessions.sendGate = CompletableDeferred()
+
+        vm.onInputChange("first")
+        vm.send()
+        val firstIds = vm.uiState.value.messages.map { it.id }
+
+        vm.onInputChange("second")
+        vm.send() // blocked by the isSending guard
+        assertEquals(firstIds, vm.uiState.value.messages.map { it.id })
+        assertEquals("second", vm.uiState.value.input)
+        assertEquals("first", sessions.lastPrompt?.first)
+    }
+
+    @Test
     fun `sending a new prompt rotates the prior live bubble to a stable id`() = runTest {
         val (vm, sessions, stream) = build()
         advanceUntilIdle()

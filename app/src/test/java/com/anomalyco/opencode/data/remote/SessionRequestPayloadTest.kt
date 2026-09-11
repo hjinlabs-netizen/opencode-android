@@ -12,6 +12,8 @@ import com.anomalyco.opencode.util.recordingClient
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
+import io.ktor.client.plugins.HttpTimeoutCapability
+import io.ktor.client.plugins.HttpTimeoutConfig
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -119,5 +121,29 @@ class SessionRequestPayloadTest {
                 message.info.id, // degrades to an empty envelope at worst
             )
         }
+    }
+
+    @Test
+    fun `sendPrompt requests infinite request and socket timeouts`() = runTest {
+        // Regression: `POST /session/{id}/message` is a long poll that
+        // resolves at end of turn; the 20s client default killed it
+        // ("Request timeout has expired ... request_timeout=20000 ms") even
+        // though the agent completed the task server-side.
+        api.sendPrompt(
+            "http://srv:4096",
+            "",
+            "s1",
+            SendMessageRequest(parts = listOf(PartInputDto(text = "hi"))),
+        )
+
+        val timeouts = captured.single().getCapabilityOrNull(HttpTimeoutCapability)
+        assertEquals(HttpTimeoutConfig.INFINITE_TIMEOUT_MS, timeouts?.requestTimeoutMillis)
+        assertEquals(HttpTimeoutConfig.INFINITE_TIMEOUT_MS, timeouts?.socketTimeoutMillis)
+    }
+
+    @Test
+    fun `regular short calls keep the client default timeouts`() = runTest {
+        api.createSession("http://srv:4096", "", CreateSessionRequest())
+        assertNull(captured.single().getCapabilityOrNull(HttpTimeoutCapability))
     }
 }

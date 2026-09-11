@@ -16,6 +16,7 @@ import com.anomalyco.opencode.data.remote.dto.SessionDto
 import com.anomalyco.opencode.domain.model.HealthInfo
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -96,11 +97,16 @@ class OpenCodeApi @Inject constructor(
      * message envelope. Assistant output for this prompt arrives separately
      * over the event stream.
      *
-     * The request itself is the side-effect that matters: this call resolves
-     * at end-of-turn and servers differ on the response shape (envelope,
-     * bare info, or nothing useful). A decode failure therefore must NOT be
-     * reported as a send failure (the UI would erase an accepted prompt), so
-     * unexpected bodies degrade to an empty envelope instead of throwing.
+     * This endpoint is a LONG POLL: it resolves only after the entire turn
+     * (every tool invocation and token batch) finishes, routinely exceeding
+     * the client's 20s default — so request and socket timeouts are lifted
+     * for this call. The connect timeout stays, and a dropped request is
+     * harmless: the turn's events arrive over SSE regardless.
+     *
+     * The request itself is the side-effect that matters: servers differ on
+     * the response shape (envelope, bare info, or nothing useful), so a
+     * decode failure degrades to an empty envelope rather than reporting a
+     * send failure (the UI would erase an accepted prompt).
      */
     suspend fun sendPrompt(
         baseUrl: String,
@@ -113,7 +119,7 @@ class OpenCodeApi @Inject constructor(
             token,
             "$SESSIONS_PATH/$sessionId/$MESSAGES_SUFFIX",
             request,
-        )
+        ) { timeout(infiniteTimeouts) }
         return runCatching { response.body<MessageDto>() }
             .recoverCatching { MessageDto(info = response.body<MessageInfoDto>()) }
             .getOrElse { MessageDto() }
@@ -201,11 +207,13 @@ class OpenCodeApi @Inject constructor(
         token: String,
         path: String,
         body: Any,
+        configure: HttpRequestBuilder.() -> Unit = {},
     ): HttpResponse = validated {
         client.post("$baseUrl$path") {
             authorize(token)
             contentType(ContentType.Application.Json)
             setBody(body)
+            configure()
         }
     }
 
