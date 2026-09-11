@@ -3,6 +3,7 @@ package com.anomalyco.opencode.ui.session
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anomalyco.opencode.domain.model.SessionSummary
+import com.anomalyco.opencode.domain.repository.FileRepository
 import com.anomalyco.opencode.domain.repository.SessionRepository
 import com.anomalyco.opencode.domain.repository.WorkspaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,6 +28,9 @@ data class SessionListUiState(
     val showNewSessionOptions: Boolean = false,
     val showDirectoryDialog: Boolean = false,
     val directoryInput: String = "",
+    /** Directory pre-validation state (P1): inline error instead of a 400 snackbar. */
+    val isValidatingDirectory: Boolean = false,
+    val directoryError: String? = null,
     /** --- multi-select deletion (Phase 5) --- */
     val selectionMode: Boolean = false,
     val selectedIds: Set<String> = emptySet(),
@@ -43,6 +47,7 @@ data class SessionListUiState(
 class SessionListViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val workspaceRepository: WorkspaceRepository,
+    private val fileRepository: FileRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SessionListUiState())
@@ -83,10 +88,12 @@ class SessionListViewModel @Inject constructor(
     }
 
     fun dismissDirectoryDialog() = _uiState.update {
-        it.copy(showDirectoryDialog = false, directoryInput = "")
+        it.copy(showDirectoryDialog = false, directoryInput = "", directoryError = null)
     }
 
-    fun onDirectoryInputChange(value: String) = _uiState.update { it.copy(directoryInput = value) }
+    fun onDirectoryInputChange(value: String) = _uiState.update {
+        it.copy(directoryInput = value, directoryError = null)
+    }
 
     /** Quick create on the server default directory. */
     fun quickCreateSession() {
@@ -94,12 +101,38 @@ class SessionListViewModel @Inject constructor(
         createSessionInternal(directory = null)
     }
 
-    /** Create bound to the typed/recently-picked working directory. */
+    /**
+     * Create bound to the typed/recently-picked working directory. The path is
+     * first probed through the file endpoints (`/find` chain) so an invalid or
+     * missing directory surfaces as an inline dialog error instead of an
+     * HTTP 400 snackbar from `POST /session`.
+     */
     fun createSessionWithDirectory() {
-        val directory = _uiState.value.directoryInput.trim()
-        if (directory.isEmpty()) return
-        _uiState.update { it.copy(showDirectoryDialog = false, directoryInput = "") }
-        createSessionInternal(directory)
+        val state = _uiState.value
+        val directory = state.directoryInput.trim()
+        if (directory.isEmpty() || state.isCreating || state.isValidatingDirectory) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isValidatingDirectory = true, directoryError = null) }
+            val probe = fileRepository.listDirectory(directory)
+            if (probe.isFailure) {
+                _uiState.update {
+                    it.copy(
+                        isValidatingDirectory = false,
+                        directoryError = probe.exceptionOrNull()?.message
+                            ?: "Klasör doğrulanamadı — sunucu erişilebilir mi?",
+                    )
+                }
+                return@launch
+            }
+            _uiState.update {
+                it.copy(
+                    isValidatingDirectory = false,
+                    showDirectoryDialog = false,
+                    directoryInput = "",
+                )
+            }
+            createSessionInternal(directory)
+        }
     }
 
     private fun createSessionInternal(directory: String?) {

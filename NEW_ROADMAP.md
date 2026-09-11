@@ -23,36 +23,39 @@
 
 ## 1. Critical & High-Priority Technical Debt (P0)
 
-1. **Server-resolution inconsistency (cold-start race).**
-   `SessionRepositoryImpl.requireServer()` reads `SecureSettingsStore.current` *synchronously with no
-   grace period*, while every other repository uses `requireActiveServer()` (3 s wait for the async
-   encrypted-store load). A deep-link straight into chat after process start can surface
-   *"Önce bir sunucuya bağlanın."* spuriously.
-   → Extract the shared resolver (already `internal` in `data/remote/ActiveServer.kt`) and make
-   `SessionRepositoryImpl` depend on `ConnectionRepository` instead of `SecureSettingsStore`
-   (also unlocks JVM testability — see §5).
+> **Sprint A status (this iteration):** P0-1 ✅ resolved · P0-2 ✅ resolved ·
+> P0-3 ✅ resolved · P0-4 ⬜ open · P0-5 ✅ resolved · P0-6 ⬜ open ·
+> P0-7 ⬜ open · P1 directory pre-validation ✅ resolved.
 
-2. **SSE endpoint is a single hardcoded path.**
-   `/event` mirrors the file-endpoint problem solved in Phase 5: an alternate server build mounting
-   `/global/event` or `/api/event` would loop backoff forever with no recovery.
-   → Adopt the same candidate-chain pattern (`/event` → `/global/event`) in `EventTransport`,
-   and cache the winning path per base URL.
+1. **[RESOLVED] Server-resolution inconsistency (cold-start race).**
+   `SessionRepositoryImpl` now resolves through the shared
+   `ConnectionRepository.requireActiveServer()` (3 s grace) like every other
+   repository; it is free of Android types and covered by JVM MockEngine tests
+   (`SessionRepositoryImplTest`).
 
-3. **Turn-boundary race between the send long-poll and the stream.**
-   `send()` resolution force-sets `isBusy=false` then `syncTranscriptFromServer()`; if a *new* turn's
-   deltas land between those two steps, the sync can drop the fresh live bubble (narrow but real).
-   → Guard with a per-send monotonic turn token: only settle/sync if no newer `send()`/turn-start
-   happened while the POST was in flight.
+2. **[RESOLVED] SSE endpoint was a single hardcoded path.**
+   `SseEventTransport` now probes `/event` → `/global/event` through an
+   `SseConnector` seam and memoizes the winning path per base URL
+   (`ConcurrentHashMap`), so reconnects skip probing entirely and a stale
+   winner is demoted automatically. Covered by `SseEventTransportTest`.
 
-4. **Part-merge key degenerates when the server omits `partID`.**
-   `MessageAssembler` merges text/reasoning by `part.id`; events with blank ids all fold into one
-   `TextPart(id = "")`. Verified against current payloads, unverified against all builds.
-   → Fall back to `messageID + index` keying, or reject blank-partId deltas into a per-message tail.
+3. **[RESOLVED] Turn-boundary race between the send long-poll and the stream.**
+   `send()` claims a monotonic `turnToken`; only the newest turn may clear
+   `isSending`/`isBusy` or run `syncTranscriptFromServer` (token-checked both
+   before and after the history fetch). Regression test:
+   `late resolution of an older send cannot clobber the newer turn`.
 
-5. **Late subscribers silently lose events (by design, but undocumented in UX).**
-   SharedFlow `replay=0`: navigating chat → files → chat during an active turn drops the missed
-   deltas; the transcript only heals on the next reconnect resync or turn end.
-   → Re-issue `refresh()` when the chat screen re-subscribes while `isBusy`.
+4. **[OPEN] Part-merge key degenerates when the server omits `partID`.**
+   `MessageAssembler` merges text/reasoning by `part.id`; events with blank
+   ids all fold into one `TextPart(id = "")`. Verified against current
+   payloads, unverified against all builds.
+   → Fall back to `messageID + index` keying, or reject blank-partId deltas
+   into a per-message tail.
+
+5. **[RESOLVED] Late subscribers silently lose events (by design, now mitigated).**
+   SharedFlow `replay=0`: deltas missed while the chat entry was recreated are
+   now reconciled — `ChatViewModel.onResume()` (driven by `LifecycleResumeEffect`
+   in `ChatScreen`) re-issues `refresh()` whenever a turn is still busy.
 
 6. **No instrumentation or device-level tests.**
    `SseEventTransport` cannot be exercised via MockEngine (no `SSECapability`); the handshake fix
@@ -74,8 +77,9 @@
   endpoint chain on every navigation), row-level "add to chat" (preview-only today), long-press
   context menu.
 - **Diff viewer**: no expand/collapse-all, no hunks virtualization beyond LazyColumn, no copy-patch.
-- **New-session dialog**: directory is not validated server-side before `POST /session` (a bad path
-  surfaces as a raw 400 snackbar); validate via `/find?path=<dir>` and show a friendly inline error.
+- **[RESOLVED] New-session dialog**: directory is now pre-validated through the
+  `/find` endpoint chain before `POST /session`; invalid paths surface as an
+  inline field error (`directoryError`) instead of a raw 400 snackbar.
 - **Question interactions**: only the first `questions[]` entry is surfaced; no per-question paging,
   no "Other" free-text when `custom` is absent, no re-open affordance beyond the badge for the
   front-most item.
@@ -140,7 +144,7 @@
 
 | Gap | Action |
 |---|---|
-| `SessionRepositoryImpl` untestable on JVM (concrete `SecureSettingsStore`) | Interface-extract server resolution (P0-1) then add MockEngine tests incl. delete-404 tolerance |
+| ~~`SessionRepositoryImpl` untestable on JVM~~ | ✅ Resolved in Sprint A: unified server resolution + `SessionRepositoryImplTest` (MockEngine, incl. delete-404 tolerance) |
 | No `./gradlew lint` gate | Add `lint` + `ktlint`/`spotless` to CI; current build is warning-clean, keep it that way |
 | No CI workflow | GitHub Actions: `testDebugUnitTest`, `lint`, `assembleDebug`, `assembleRelease` (R8 regression gate), artifact upload + mapping files |
 | No screenshot/UI tests | Roborazzi previews for the 5 part cards + dialogs (cheap regression net for Compose) |
@@ -163,7 +167,8 @@
 
 ## Suggested Sequencing
 
-**Sprint A (correctness):** P0-1, P0-2, P0-3, P0-5, §5 CI + lint.
+**Sprint A (correctness):** ✅ DONE — P0-1, P0-2, P0-3, P0-5, directory pre-validation
+(P1) shipped with tests; §5 CI + lint still pending.
 **Sprint B (polish):** P1 items (i18n extraction first), P0-4/P0-7, endpoint probe caching (P2-2).
 **Sprint C (capability):** offline cache (Room), turn controls (abort/retry), notifications.
 **Sprint D (reach):** tablet scenes, multi-server/discovery, release hardening (§6).

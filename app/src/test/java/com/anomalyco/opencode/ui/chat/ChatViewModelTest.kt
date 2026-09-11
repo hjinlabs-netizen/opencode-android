@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -737,5 +738,67 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertEquals("""C:\work\t24""", vm.uiState.value.directory)
+    }
+
+    // ---- Sprint A: turn token guard + resume reconciliation ------------------
+
+    @Test
+    fun `late resolution of an older send cannot clobber the newer turn`() = runTest {
+        val (vm, sessions, stream) = build()
+        advanceUntilIdle()
+        val gate1 = CompletableDeferred<Unit>()
+        sessions.sendGate = gate1
+
+        sessions.sendResult = { Result.success(ChatMessage(id = "srv-1", sessionId = "s1", role = MessageRole.USER)) }
+        vm.onInputChange("birinci")
+        vm.send()
+        // Stream acks turn 1: isSending clears, live bubble opens.
+        stream.push(StreamEvent.TextDelta("s1", "p1", "cevap1"))
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.isSending)
+
+        // Turn 2 starts while turn 1's POST is still long-polling.
+        val gate2 = CompletableDeferred<Unit>()
+        sessions.sendGate = gate2
+        sessions.sendResult = { Result.success(ChatMessage(id = "srv-2", sessionId = "s1", role = MessageRole.USER)) }
+        vm.onInputChange("ikinci")
+        vm.send()
+        // Turn 2's own live bubble opens.
+        stream.push(StreamEvent.TextDelta("s1", "p2", "cevap2"))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.isBusy)
+
+        // Turn 1 resolves LATE: must not settle busy nor sync away turn 2.
+        gate1.complete(Unit)
+        advanceUntilIdle()
+        assertTrue("late send-1 cleared isBusy", vm.uiState.value.isBusy)
+        val live = vm.uiState.value.messages.firstOrNull {
+            it.id == MessageAssembler.liveMessageId("s1")
+        }
+        assertNotNull("late send-1 sync dropped the newer live bubble", live)
+        assertEquals("cevap2", (live!!.parts.single() as MessagePart.TextPart).content)
+
+        // Turn 2 resolves normally: everything settles.
+        gate2.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.isBusy)
+        assertFalse(vm.uiState.value.isSending)
+    }
+
+    @Test
+    fun `onResume refreshes only while a turn is busy`() = runTest {
+        val (vm, sessions, stream) = build()
+        advanceUntilIdle()
+        val baseline = sessions.loadCalls
+
+        vm.onResume()
+        advanceUntilIdle()
+        assertEquals(baseline, sessions.loadCalls) // idle: no pointless reload
+
+        stream.push(StreamEvent.TextDelta("s1", "p1", "devam"))
+        advanceUntilIdle()
+        vm.onResume()
+        advanceUntilIdle()
+        assertTrue(sessions.loadCalls > baseline)
     }
 }

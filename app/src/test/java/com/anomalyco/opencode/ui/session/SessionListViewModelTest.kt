@@ -1,8 +1,12 @@
 package com.anomalyco.opencode.ui.session
 
 import com.anomalyco.opencode.domain.model.ChatMessage
+import com.anomalyco.opencode.domain.model.FileContent
+import com.anomalyco.opencode.domain.model.FileDiff
+import com.anomalyco.opencode.domain.model.FileNode
 import com.anomalyco.opencode.domain.model.Session
 import com.anomalyco.opencode.domain.model.SessionSummary
+import com.anomalyco.opencode.domain.repository.FileRepository
 import com.anomalyco.opencode.domain.repository.SessionRepository
 import com.anomalyco.opencode.domain.repository.WorkspaceRepository
 import com.anomalyco.opencode.util.MainDispatcherRule
@@ -67,6 +71,21 @@ private class FakeWorkspace : WorkspaceRepository {
     }
 }
 
+/** File endpoint double for directory pre-validation (Sprint A P1). */
+private class FakeFiles : FileRepository {
+    var listResult: (String) -> Result<List<FileNode>> = { Result.success(emptyList()) }
+    val probed = mutableListOf<String>()
+
+    override suspend fun listDirectory(path: String): Result<List<FileNode>> {
+        probed += path
+        return listResult(path)
+    }
+
+    override suspend fun readFile(path: String) = Result.failure<FileContent>(NotImplementedError())
+    override suspend fun diffFile(path: String) = Result.failure<FileDiff>(NotImplementedError())
+    override suspend fun workingTreeDiff() = Result.success(emptyList<FileDiff>())
+}
+
 class SessionListViewModelTest {
 
     @get:Rule
@@ -75,15 +94,16 @@ class SessionListViewModelTest {
     private class Harness(
         val repository: Fake = Fake(),
         val workspace: FakeWorkspace = FakeWorkspace(),
+        val files: FakeFiles = FakeFiles(),
     ) {
-        val viewModel = SessionListViewModel(repository, workspace)
+        val viewModel = SessionListViewModel(repository, workspace, files)
     }
 
     @Test
     fun `refresh failure surfaces a friendly error`() = runTest {
         val h = Harness()
         h.repository.refreshResult = Result.failure(Exception("Sunucuya bağlanılamadı"))
-        val vm = SessionListViewModel(h.repository, h.workspace)
+        val vm = SessionListViewModel(h.repository, h.workspace, h.files)
         advanceUntilIdle()
 
         assertEquals("Sunucuya bağlanılamadı", vm.uiState.value.error)
@@ -144,6 +164,37 @@ class SessionListViewModelTest {
 
         assertEquals("unset", h.repository.lastCreateDirectory)
         assertNull(h.viewModel.uiState.value.createdSessionId)
+        assertTrue(h.files.probed.isEmpty())
+    }
+
+    @Test
+    fun `invalid directory probes via file endpoints and shows inline error`() = runTest {
+        val h = Harness()
+        h.files.listResult = { Result.failure(Exception("Sunucu hatası: HTTP 400")) }
+        advanceUntilIdle()
+
+        h.viewModel.showDirectoryDialog()
+        h.viewModel.onDirectoryInputChange("""C:\nope\missing""")
+        h.viewModel.createSessionWithDirectory()
+        advanceUntilIdle()
+
+        assertEquals(listOf("""C:\nope\missing"""), h.files.probed)
+        assertEquals("Sunucu hatası: HTTP 400", h.viewModel.uiState.value.directoryError)
+        assertEquals("unset", h.repository.lastCreateDirectory) // never posted
+        assertTrue(h.viewModel.uiState.value.showDirectoryDialog) // stays open for fixing
+    }
+
+    @Test
+    fun `typing again clears the stale directory error`() = runTest {
+        val h = Harness()
+        h.files.listResult = { Result.failure(Exception("bad")) }
+        advanceUntilIdle()
+        h.viewModel.onDirectoryInputChange("x")
+        h.viewModel.createSessionWithDirectory()
+        advanceUntilIdle()
+
+        h.viewModel.onDirectoryInputChange("y")
+        assertNull(h.viewModel.uiState.value.directoryError)
     }
 
     @Test

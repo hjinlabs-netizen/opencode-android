@@ -98,6 +98,14 @@ class ChatViewModel @Inject constructor(
     private val sessionId: String = savedStateHandle[ARG_SESSION_ID] ?: ""
     private var liveTurnCounter = 0
 
+    /**
+     * Monotonic turn sequence. Every [send] claims a token; only the token
+     * still owned by the NEWEST turn may settle busy state or overwrite the
+     * transcript — a late-resolving older long-poll POST can never clobber a
+     * newer turn's live bubble (P0-3).
+     */
+    private var turnToken = 0L
+
     private val _uiState = MutableStateFlow(ChatUiState(sessionId = sessionId))
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
@@ -255,6 +263,7 @@ class ChatViewModel @Inject constructor(
             parts = listOf(MessagePart.TextPart(text)),
             createdAt = System.currentTimeMillis(),
         )
+        val myTurn = ++turnToken
         _uiState.update { current ->
             current.copy(
                 // Close the previous live bubble so this turn starts fresh.
@@ -271,51 +280,57 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val outcome =
                 sessionRepository.sendPrompt(sessionId, text, agent = state.agent.wireName)
+            // The optimistic row may always be swapped for its server twin —
+            // it is keyed by this send's own id.
+            outcome.onSuccess { serverMessage ->
+                _uiState.update { current ->
+                    current.copy(
+                        messages = current.messages.map {
+                            if (it.id == optimisticId && serverMessage.id.isNotBlank()) {
+                                serverMessage
+                            } else {
+                                it
+                            }
+                        },
+                    )
+                }
+            }
+            // Everything that touches SHARED turn state is token-guarded: a
+            // late resolution of an older POST must not clear the newer turn's
+            // isSending/isBusy flags nor sync away its live bubble (P0-3).
+            if (myTurn != turnToken) return@launch
             outcome
-                .onSuccess { serverMessage ->
-                    _uiState.update { current ->
-                        current.copy(
-                            // Swap in the server row only when it carries an
-                            // id; an unrecognised response shape keeps the
-                            // optimistic bubble visible until history sync.
-                            messages = current.messages.map {
-                                if (it.id == optimisticId && serverMessage.id.isNotBlank()) {
-                                    serverMessage
-                                } else {
-                                    it
-                                }
-                            },
-                            isSending = false,
-                        )
-                    }
+                .onSuccess {
+                    _uiState.update { it.copy(isSending = false) }
                 }
                 .onFailure { error ->
-                    _uiState.update { current ->
-                        current.copy(
-                            // The user's message stays visible even when the
-                            // POST fails: OpenCode's send-message call resolves
-                            // at END OF TURN, so a late error/timeout almost
-                            // never means the prompt was rejected — wiping the
-                            // bubble blanks the whole transcript mid-stream.
-                            // The snackbar explains; a refresh reconciles.
-                            isSending = false,
-                            error = error.message,
-                        )
-                    }
+                    // The user's message stays visible even when the POST
+                    // fails: OpenCode's send-message call resolves at END OF
+                    // TURN, so a late error almost never means the prompt was
+                    // rejected — wiping the bubble blanks the transcript.
+                    _uiState.update { it.copy(isSending = false, error = error.message) }
                 }
             // The long poll resolving means the turn is over server-side, no
-            // matter the outcome: end the busy state and reconcile the
-            // transcript with the authoritative history. The live bubble is
-            // dropped (its content is now persisted) unless a new turn has
-            // already begun streaming.
+            // matter the outcome: end the busy state and reconcile with the
+            // authoritative history.
             _uiState.update { it.copy(isBusy = false) }
-            syncTranscriptFromServer()
+            syncTranscriptFromServer(myTurn)
         }
     }
 
-    private suspend fun syncTranscriptFromServer() {
+    /**
+     * Screen resumed (nav back-stack or app foreground): if a turn was live
+     * while the chat was not visible, deltas may have been missed by other
+     * subscribers or a dropped connection — reconcile in the background (P0-5).
+     */
+    fun onResume() {
+        if (_uiState.value.isBusy) refresh()
+    }
+
+    private suspend fun syncTranscriptFromServer(token: Long) {
         sessionRepository.loadMessages(sessionId).onSuccess { history ->
             if (history.isEmpty()) return@onSuccess // never blank a live transcript
+            if (token != turnToken) return@onSuccess // a newer turn took over
             _uiState.update { current ->
                 val live =
                     if (current.isBusy) {

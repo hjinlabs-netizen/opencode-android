@@ -1,6 +1,5 @@
 package com.anomalyco.opencode.data.repository
 
-import com.anomalyco.opencode.data.remote.NoServerConfiguredException
 import com.anomalyco.opencode.data.remote.OpenCodeApi
 import com.anomalyco.opencode.data.remote.OpenCodeHttpException
 import com.anomalyco.opencode.data.remote.dto.CreateSessionRequest
@@ -8,12 +7,12 @@ import com.anomalyco.opencode.data.remote.dto.MessageDto
 import com.anomalyco.opencode.data.remote.dto.PartInputDto
 import com.anomalyco.opencode.data.remote.dto.SendMessageRequest
 import com.anomalyco.opencode.data.remote.dto.SessionDto
+import com.anomalyco.opencode.data.remote.requireActiveServer
 import com.anomalyco.opencode.data.remote.toFriendlyApiException
-import com.anomalyco.opencode.data.settings.SecureSettingsStore
 import com.anomalyco.opencode.domain.model.ChatMessage
-import com.anomalyco.opencode.domain.model.ServerConfig
 import com.anomalyco.opencode.domain.model.Session
 import com.anomalyco.opencode.domain.model.SessionSummary
+import com.anomalyco.opencode.domain.repository.ConnectionRepository
 import com.anomalyco.opencode.domain.repository.SessionRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,16 +25,17 @@ import javax.inject.Singleton
 
 /**
  * Concrete [SessionRepository]. Talks to the OpenCode HTTP API and keeps a
- * small in-memory cache of the session list so observers (and future Compose
+ * small in-memory cache of the session list so observers (and Compose
  * screens) get instant updates after every mutation.
  *
- * The active server is resolved synchronously from the encrypted settings
- * store; every failure is mapped to a friendly [Result.failure].
+ * Server resolution is unified with every other repository through
+ * [requireActiveServer] (3 s grace for the encrypted store's async load),
+ * which also keeps this class free of Android types and JVM-testable.
  */
 @Singleton
 class SessionRepositoryImpl @Inject constructor(
     private val api: OpenCodeApi,
-    private val settings: SecureSettingsStore,
+    private val connectionRepository: ConnectionRepository,
 ) : SessionRepository {
 
     private val cacheMutex = Mutex()
@@ -107,9 +107,7 @@ class SessionRepositoryImpl @Inject constructor(
         ).toDomain()
     }
 
-    private fun requireServer(): ServerConfig =
-        settings.current?.let { it.copy(baseUrl = it.normalizedUrl) }
-            ?: throw NoServerConfiguredException()
+    private suspend fun requireServer() = connectionRepository.requireActiveServer()
 
     private fun cacheSession(session: Session) {
         _sessions.update { list ->

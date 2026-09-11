@@ -180,6 +180,8 @@ fun SessionListScreen(
         DirectoryDialog(
             value = state.directoryInput,
             recents = recents,
+            isValidating = state.isValidatingDirectory,
+            error = state.directoryError,
             onValueChange = viewModel::onDirectoryInputChange,
             onPickRecent = viewModel::onDirectoryInputChange,
             onCreate = viewModel::createSessionWithDirectory,
@@ -348,6 +350,8 @@ private fun NewSessionOptionsDialog(
 private fun DirectoryDialog(
     value: String,
     recents: List<String>,
+    isValidating: Boolean,
+    error: String?,
     onValueChange: (String) -> Unit,
     onPickRecent: (String) -> Unit,
     onCreate: () -> Unit,
@@ -365,6 +369,8 @@ private fun DirectoryDialog(
                     label = { Text("Klasör yolu") },
                     placeholder = { Text("C:\\Users\\zuley\\Desktop\\proje") },
                     singleLine = true,
+                    isError = error != null,
+                    supportingText = error?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
                 )
                 if (recents.isNotEmpty()) {
                     Text(
@@ -393,7 +399,19 @@ private fun DirectoryDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onCreate, enabled = value.isNotBlank()) { Text("Oluştur") }
+            Button(onClick = onCreate, enabled = value.isNotBlank() && !isValidating) {
+                if (isValidating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Doğrulanıyor…")
+                } else {
+                    Text("Oluştur")
+                }
+            }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Vazgeç") }
