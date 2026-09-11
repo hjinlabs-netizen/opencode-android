@@ -1,4 +1,4 @@
-# OpenCode — Android Thin Client
+# Unofficial OpenCode Client for Android
 
 Native Android client for [OpenCode](https://github.com/anomalyco/opencode), the open-source AI coding agent.
 Built with Jetpack Compose, Ktor, and Hilt. Connects to a self-hosted OpenCode server
@@ -6,6 +6,11 @@ Built with Jetpack Compose, Ktor, and Hilt. Connects to a self-hosted OpenCode s
 
 > **Note:** This project is not built by, affiliated with, or endorsed by the OpenCode team.
 > It is an independent client that talks to a user-run OpenCode server.
+
+> **Trademark:** "OpenCode" is a trademark of its respective owners. The name is used here
+> descriptively, to identify the server software this independent client connects to. No
+> OpenCode source code, binaries, logos or brand assets are included in this repository.
+> See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Phase 1 — What's included
 

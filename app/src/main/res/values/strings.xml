@@ -6,7 +6,9 @@
     resources: they are produced outside the UI layer.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="app_name" translatable="false">OpenCode</string>
+    <!-- Distinctive product name: "OpenCode" only ever appears in a
+         subordinate, descriptive position (unofficial-client policy). -->
+    <string name="app_name">Client for OpenCode</string>
 
     <!-- Common / actions -->
     <string name="action_back">Back</string>

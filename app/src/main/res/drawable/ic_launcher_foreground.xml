@@ -3,7 +3,7 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Stylized "</>" mark echoing the OpenCode brand -->
+    <!-- Original "</>" glyph drawn for this project (no third-party marks). -->
     <path
         android:pathData="M42,38 L26,54 L42,70"
         android:strokeColor="#7C6CFF"

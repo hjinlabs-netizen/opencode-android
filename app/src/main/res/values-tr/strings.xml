@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Turkish (default historical language of the app). Keys mirror values/strings.xml. -->
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="app_name">OpenCode İstemcisi</string>
+
     <!-- Common / actions -->
     <string name="action_back">Geri</string>
     <string name="action_refresh">Yenile</string>

@@ -33,7 +33,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.anomalyco.opencode"
+        // Compliance: the PUBLISHED package id must live in a namespace this
+        // project owns (Play identity/impersonation policy). The internal
+        // `namespace`/source packages remain com.anomalyco.opencode for now;
+        // a full source rename is tracked separately.
+        applicationId = "com.hjinlabs.opencodeclient"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
