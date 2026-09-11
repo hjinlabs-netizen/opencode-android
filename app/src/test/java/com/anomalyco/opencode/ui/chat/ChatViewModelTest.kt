@@ -175,6 +175,54 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `isSending unlocks when the first stream event acks the prompt during the long poll`() = runTest {
+        val (vm, sessions, stream) = build()
+        advanceUntilIdle()
+        sessions.sendGate = CompletableDeferred() // POST stays pending until end of turn
+        vm.onInputChange("hi")
+        vm.send()
+        assertTrue(vm.uiState.value.isSending)
+
+        stream.push(StreamEvent.TextDelta("s1", "p1", "Go"))
+        advanceUntilIdle()
+        // The button must free up at the first token, not minutes later when
+        // the end-of-turn long poll finally resolves.
+        assertFalse(vm.uiState.value.isSending)
+        assertTrue(vm.uiState.value.isBusy) // busy now carries the "working" state
+    }
+
+    @Test
+    fun `step finish settles busy even when session idle never arrives`() = runTest {
+        val (vm, _, stream) = build()
+        advanceUntilIdle()
+        stream.push(StreamEvent.ToolCalled("s1", "c1", "bash", "{}"))
+        stream.push(StreamEvent.StepStarted("s1", "st", "run command"))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.isBusy)
+
+        stream.push(StreamEvent.StepFinished("s1", "st", "run command"))
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.isBusy)
+    }
+
+    @Test
+    fun `trailing metadata events cannot re-arm the busy indicator`() = runTest {
+        val (vm, _, stream) = build()
+        advanceUntilIdle()
+        stream.push(StreamEvent.TextDelta("s1", "p1", "x"))
+        advanceUntilIdle()
+        stream.push(StreamEvent.SessionIdle("s1"))
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.isBusy)
+
+        // Late bookkeeping for the finished turn must stay neutral.
+        stream.push(StreamEvent.MessageUpdated("s1", "m9"))
+        stream.push(StreamEvent.ToolFinished("s1", "c1", com.anomalyco.opencode.domain.model.ToolStatus.COMPLETED, null))
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.isBusy)
+    }
+
+    @Test
     fun `deltas from a different session are ignored`() = runTest {
         val (vm, _, stream) = build()
         advanceUntilIdle()

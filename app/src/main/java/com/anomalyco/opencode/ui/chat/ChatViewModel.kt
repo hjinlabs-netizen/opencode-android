@@ -58,9 +58,13 @@ data class ChatUiState(
     val input: String = "",
     val agent: AgentMode = AgentMode.BUILD,
     val isLoadingHistory: Boolean = true,
-    /** A prompt request is in flight. */
+    /**
+     * Prompt dispatch is unacknowledged. Clears at the FIRST proof the server
+     * accepted the turn (any stream event) or when the end-of-turn long poll
+     * resolves — never while the agent is merely still working.
+     */
     val isSending: Boolean = false,
-    /** The server is actively producing output (stream events pending idle). */
+    /** The agent is actively thinking/streaming; settled by step-finish, idle, or turn resolution. */
     val isBusy: Boolean = false,
     val streamStatus: StreamStatus = StreamStatus.Disconnected,
     /** Permissions/questions blocking the agent, oldest first. */
@@ -340,10 +344,31 @@ class ChatViewModel @Inject constructor(
             val settled = event is StreamEvent.SessionIdle
             current.copy(
                 messages = MessageAssembler.apply(current.messages, sessionId, event),
+                // Busy tracks agent PROGRESS, not the HTTP call. Re-arm only
+                // on output-producing events so a trailing metadata event can
+                // never re-stick the indicator after the turn ends.
                 isBusy = when (event) {
-                    is StreamEvent.SessionIdle, is StreamEvent.SessionError -> false
-                    else -> true
+                    is StreamEvent.SessionIdle,
+                    is StreamEvent.SessionError,
+                    is StreamEvent.StepFinished,
+                    -> false
+                    is StreamEvent.TextDelta,
+                    is StreamEvent.ReasoningDelta,
+                    is StreamEvent.ToolCalled,
+                    is StreamEvent.ToolUpdated,
+                    is StreamEvent.StepStarted,
+                    is StreamEvent.PermissionAsked,
+                    is StreamEvent.QuestionAsked,
+                    -> true
+                    is StreamEvent.MessageUpdated,
+                    is StreamEvent.ToolFinished,
+                    is StreamEvent.Unknown,
+                    -> current.isBusy
                 },
+                // Any session-matched event proves the prompt was ACCEPTED by
+                // the server: the send button unlocks immediately instead of
+                // spinning until the end-of-turn long poll resolves.
+                isSending = false,
                 pendingInteractions = when {
                     settled -> emptyList()
                     incoming != null -> current.pendingInteractions + incoming
