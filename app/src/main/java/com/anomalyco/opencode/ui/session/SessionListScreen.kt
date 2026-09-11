@@ -51,12 +51,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.model.SessionSummary
-import com.anomalyco.opencode.ui.common.formatRelativeTime
+import com.anomalyco.opencode.ui.common.relativeTimeText
 
 /**
  * Lists server sessions; the FAB opens the quick/custom-directory creation
@@ -73,11 +76,23 @@ fun SessionListScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val recents by viewModel.recentDirectories.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     LaunchedEffect(state.error) {
         state.error?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.onErrorShown()
+        }
+    }
+    LaunchedEffect(state.deleteReport) {
+        state.deleteReport?.let { report ->
+            val message = context.getString(
+                R.string.sessions_delete_report,
+                report.deleted,
+                report.total,
+            )
+            snackbarHostState.showSnackbar(message)
+            viewModel.onDeleteReportShown()
         }
     }
     LaunchedEffect(state.createdSessionId) {
@@ -100,13 +115,13 @@ fun SessionListScreen(
                 )
             } else {
                 TopAppBar(
-                    title = { Text("Oturumlar") },
+                    title = { Text(stringResource(R.string.sessions_title)) },
                     actions = {
                         IconButton(onClick = viewModel::refresh) {
-                            Icon(Icons.Filled.Refresh, contentDescription = "Yenile")
+                            Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.action_refresh))
                         }
                         IconButton(onClick = onOpenSettings) {
-                            Icon(Icons.Filled.Settings, contentDescription = "Ayarlar")
+                            Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.action_settings))
                         }
                     },
                 )
@@ -128,7 +143,13 @@ fun SessionListScreen(
                             Icon(Icons.Filled.Add, contentDescription = null)
                         }
                     },
-                    text = { Text(if (state.isCreating) "Oluşturuluyor…" else "Yeni Oturum") },
+                    text = {
+                        Text(
+                            stringResource(
+                                if (state.isCreating) R.string.sessions_creating else R.string.sessions_new,
+                            ),
+                        )
+                    },
                 )
             }
         },
@@ -193,20 +214,17 @@ fun SessionListScreen(
         AlertDialog(
             onDismissRequest = viewModel::cancelDelete,
             icon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-            title = { Text("Oturumları sil") },
+            title = { Text(stringResource(R.string.sessions_delete_title)) },
             text = {
-                Text(
-                    "${state.selectedIds.size} oturum sunucudan kalıcı olarak silinecek. " +
-                        "Bu işlem geri alınamaz.",
-                )
+                Text(stringResource(R.string.sessions_delete_message, state.selectedIds.size))
             },
             confirmButton = {
                 Button(onClick = viewModel::confirmDelete) {
-                    Text("Sil", color = MaterialTheme.colorScheme.onError)
+                    Text(stringResource(R.string.sessions_delete_confirm), color = MaterialTheme.colorScheme.onError)
                 }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::cancelDelete) { Text("Vazgeç") }
+                TextButton(onClick = viewModel::cancelDelete) { Text(stringResource(R.string.action_cancel)) }
             },
         )
     }
@@ -222,10 +240,10 @@ private fun SelectionTopBar(
     onDelete: () -> Unit,
 ) {
     TopAppBar(
-        title = { Text("$selectedCount seçili") },
+        title = { Text(stringResource(R.string.sessions_selected_count, selectedCount)) },
         navigationIcon = {
             IconButton(onClick = onClear) {
-                Icon(Icons.Filled.Close, contentDescription = "Seçimi bitir")
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.sessions_exit_selection))
             }
         },
         actions = {
@@ -238,12 +256,12 @@ private fun SelectionTopBar(
                 )
             } else {
                 IconButton(onClick = onSelectAll) {
-                    Icon(Icons.Filled.SelectAll, contentDescription = "Tümünü seç")
+                    Icon(Icons.Filled.SelectAll, contentDescription = stringResource(R.string.sessions_select_all))
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Filled.Delete,
-                        contentDescription = "Seçilenleri sil",
+                        contentDescription = stringResource(R.string.sessions_delete_selected),
                         tint = MaterialTheme.colorScheme.error,
                     )
                 }
@@ -280,7 +298,7 @@ private fun SessionRow(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = session.title.ifBlank { "Yeni oturum" },
+                    text = session.title.ifBlank { stringResource(R.string.sessions_default_title) },
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -299,7 +317,7 @@ private fun SessionRow(
                         )
                     }
                     Text(
-                        text = formatRelativeTime(session.updatedAt),
+                        text = relativeTimeText(session.updatedAt),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -325,12 +343,12 @@ private fun NewSessionOptionsDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Filled.Chat, contentDescription = null) },
-        title = { Text("Yeni oturum") },
+        title = { Text(stringResource(R.string.new_session_title)) },
         text = {
-            Text("Oturumun çalışacağı klasörü seçin. Hızlı oluşturma, sunucunun varsayılan çalışma dizinini kullanır.")
+            Text(stringResource(R.string.new_session_description))
         },
         confirmButton = {
-            Button(onClick = onQuickCreate) { Text("Hızlı Oluştur") }
+            Button(onClick = onQuickCreate) { Text(stringResource(R.string.new_session_quick)) }
         },
         dismissButton = {
             OutlinedButton(onClick = onCustomDirectory) {
@@ -340,7 +358,7 @@ private fun NewSessionOptionsDialog(
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(Modifier.width(6.dp))
-                Text("Özel Klasör…")
+                Text(stringResource(R.string.new_session_custom))
             }
         },
     )
@@ -359,22 +377,22 @@ private fun DirectoryDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Çalışma klasörü") },
+        title = { Text(stringResource(R.string.directory_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = value,
                     onValueChange = onValueChange,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Klasör yolu") },
-                    placeholder = { Text("C:\\Users\\zuley\\Desktop\\proje") },
+                    label = { Text(stringResource(R.string.directory_label)) },
+                    placeholder = { Text(stringResource(R.string.directory_placeholder)) },
                     singleLine = true,
                     isError = error != null,
                     supportingText = error?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
                 )
                 if (recents.isNotEmpty()) {
                     Text(
-                        text = "Son kullanılanlar",
+                        text = stringResource(R.string.directory_recent),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -407,14 +425,14 @@ private fun DirectoryDialog(
                         color = MaterialTheme.colorScheme.onPrimary,
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("Doğrulanıyor…")
+                    Text(stringResource(R.string.directory_validating))
                 } else {
-                    Text("Oluştur")
+                    Text(stringResource(R.string.directory_create))
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Vazgeç") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }
@@ -434,11 +452,11 @@ private fun EmptySessions(modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.width(12.dp))
         Text(
-            text = "Henüz oturum yok",
+            text = stringResource(R.string.sessions_empty_title),
             style = MaterialTheme.typography.titleMedium,
         )
         Text(
-            text = "Başlamak için yeni bir oturum oluşturun.",
+            text = stringResource(R.string.sessions_empty_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

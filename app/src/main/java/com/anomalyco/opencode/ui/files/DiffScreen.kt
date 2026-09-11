@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.UnfoldLess
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,13 +31,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anomalyco.opencode.R
 
 /**
  * Dedicated route showing the agent's working-tree changes as color-coded
- * unified diffs, one collapsible card per file.
+ * unified diffs, one collapsible card per file, with an expand/collapse-all
+ * control.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +51,7 @@ fun DiffScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val expanded by viewModel.expanded.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val allExpanded = state.files.isNotEmpty() && expanded.size == state.files.size
 
     LaunchedEffect(state.error) {
         state.error?.let {
@@ -58,18 +64,32 @@ fun DiffScreen(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Değişiklikler") },
+                title = { Text(stringResource(R.string.diff_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Geri",
+                            contentDescription = stringResource(R.string.action_back),
                         )
                     }
                 },
                 actions = {
+                    if (state.files.isNotEmpty()) {
+                        IconButton(onClick = viewModel::toggleAll) {
+                            Icon(
+                                imageVector = if (allExpanded) {
+                                    Icons.Filled.UnfoldLess
+                                } else {
+                                    Icons.Filled.UnfoldMore
+                                },
+                                contentDescription = stringResource(
+                                    if (allExpanded) R.string.diff_collapse_all else R.string.diff_expand_all,
+                                ),
+                            )
+                        }
+                    }
                     IconButton(onClick = viewModel::refresh) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Yenile")
+                        Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.action_refresh))
                     }
                 },
             )
@@ -93,12 +113,12 @@ fun DiffScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    text = "Değişiklik yok",
+                    text = stringResource(R.string.diff_none_title),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.size(4.dp))
                 Text(
-                    text = "Çalışma ağacında HEAD'e göre değişen dosya bulunmuyor.",
+                    text = stringResource(R.string.diff_none_body),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

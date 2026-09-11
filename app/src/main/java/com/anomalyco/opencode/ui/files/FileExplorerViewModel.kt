@@ -19,6 +19,8 @@ data class FileExplorerUiState(
     /** Directory currently shown; "" is the server-side project root. */
     val path: String = "",
     val entries: List<FileNode> = emptyList(),
+    /** Name filter over [entries]; server-side search is a P3 item. */
+    val query: String = "",
     /** Parent chain for the back/breadcrumb affordance. */
     val breadcrumbs: List<String> = emptyList(),
     val isLoading: Boolean = false,
@@ -27,6 +29,17 @@ data class FileExplorerUiState(
     val isReadingFile: Boolean = false,
     val error: String? = null,
 )
+
+/**
+ * Case-insensitive name filter for the current directory listing (Sprint B
+ * P1). Blank/whitespace queries match everything; directories and files are
+ * matched by their display name only (not the full path).
+ */
+internal fun filterFileNodes(nodes: List<FileNode>, query: String): List<FileNode> {
+    val needle = query.trim().lowercase()
+    if (needle.isEmpty()) return nodes
+    return nodes.filter { it.name.lowercase().contains(needle) }
+}
 
 /**
  * Browse-only file explorer over the server's project view: tap a directory
@@ -55,12 +68,17 @@ class FileExplorerViewModel @Inject constructor(
 
     fun onNodeClick(node: FileNode) {
         if (node.isDirectory) {
-            _uiState.update { it.copy(breadcrumbs = it.breadcrumbs + it.path, path = node.path) }
+            _uiState.update { it.copy(breadcrumbs = it.breadcrumbs + it.path, path = node.path, query = "") }
             loadDirectory(node.path)
         } else {
             loadFile(node.path)
         }
     }
+
+    /** Live name filter over the current directory listing. */
+    fun onQueryChange(value: String) = _uiState.update { it.copy(query = value) }
+
+    fun clearQuery() = _uiState.update { it.copy(query = "") }
 
     /** Pop one directory level (also used by the system back when at root). */
     fun navigateUp(): Boolean {

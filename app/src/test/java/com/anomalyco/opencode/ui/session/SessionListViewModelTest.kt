@@ -296,7 +296,7 @@ class SessionListViewModelTest {
     }
 
     @Test
-    fun `partial delete failure reports count and keeps failed rows`() = runTest {
+    fun `partial delete failure aggregates into an x-of-y report and keeps failed rows`() = runTest {
         val repository = threeSessions()
         repository.deleteResult = { id ->
             if (id == "b") Result.failure(Exception("nope")) else Result.success(Unit)
@@ -308,9 +308,39 @@ class SessionListViewModelTest {
         h.viewModel.confirmDelete()
         advanceUntilIdle()
 
-        assertEquals("1 oturum silinemedi.", h.viewModel.uiState.value.error)
+        // P0-7: one failure does not abort; report says 2 of 3 succeeded.
+        assertEquals(DeleteReport(deleted = 2, total = 3), h.viewModel.uiState.value.deleteReport)
+        assertNull(h.viewModel.uiState.value.error)
         assertFalse(h.viewModel.uiState.value.selectionMode)
         // Only the failed row survives in the cache.
         assertEquals(listOf("b"), h.viewModel.uiState.value.sessions.map { it.id })
+    }
+
+    @Test
+    fun `all deletes failing reports zero deleted`() = runTest {
+        val repository = threeSessions()
+        repository.deleteResult = { Result.failure(Exception("offline")) }
+        val h = Harness(repository)
+        advanceUntilIdle()
+        h.viewModel.selectAll()
+
+        h.viewModel.confirmDelete()
+        advanceUntilIdle()
+
+        assertEquals(DeleteReport(deleted = 0, total = 3), h.viewModel.uiState.value.deleteReport)
+        assertEquals(3, h.viewModel.uiState.value.sessions.size)
+    }
+
+    @Test
+    fun `full success clears selection without a report`() = runTest {
+        val h = Harness(threeSessions())
+        advanceUntilIdle()
+        h.viewModel.selectAll()
+
+        h.viewModel.confirmDelete()
+        advanceUntilIdle()
+
+        assertNull(h.viewModel.uiState.value.deleteReport)
+        assertFalse(h.viewModel.uiState.value.selectionMode)
     }
 }

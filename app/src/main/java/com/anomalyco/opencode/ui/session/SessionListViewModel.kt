@@ -16,12 +16,17 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Outcome summary of a partial batch delete, formatted at the UI layer. */
+data class DeleteReport(val deleted: Int, val total: Int)
+
 /** Immutable render state for [SessionListScreen]. */
 data class SessionListUiState(
     val sessions: List<SessionSummary> = emptyList(),
     val isLoading: Boolean = true,
     val isCreating: Boolean = false,
     val error: String? = null,
+    /** Partial-failure summary from the last batch delete (P0-7). */
+    val deleteReport: DeleteReport? = null,
     /** One-shot navigation signal, consumed via [SessionListViewModel.onSessionOpened]. */
     val createdSessionId: String? = null,
     /** --- new-session flow (Phase 5) --- */
@@ -203,7 +208,12 @@ class SessionListViewModel @Inject constructor(
 
     fun cancelDelete() = _uiState.update { it.copy(showDeleteConfirm = false) }
 
-    /** Deletes every selected session; failures keep those rows and are reported. */
+    /**
+     * Deletes every selected session. Individual failures never abort the
+     * batch (P0-7): successes accumulate (the repository cache already drops
+     * them optimistically) and a partial run reports "deleted X of Y" for
+     * the UI to render. Failed rows stay visible.
+     */
     fun confirmDelete() {
         val ids = _uiState.value.selectedIds
         if (ids.isEmpty() || _uiState.value.isDeleting) {
@@ -212,22 +222,26 @@ class SessionListViewModel @Inject constructor(
         }
         _uiState.update { it.copy(showDeleteConfirm = false, isDeleting = true) }
         viewModelScope.launch {
-            val failed = mutableListOf<String>()
+            var deletedCount = 0
+            var failedCount = 0
             ids.forEach { id ->
-                sessionRepository.deleteSession(id).onFailure { failed += id }
+                when {
+                    sessionRepository.deleteSession(id).isSuccess -> deletedCount++
+                    else -> failedCount++
+                }
             }
             _uiState.update { state ->
                 state.copy(
                     isDeleting = false,
                     selectionMode = false,
                     selectedIds = emptySet(),
-                    // Rows whose delete was rejected stay visible.
-                    error = failed.takeIf { it.isNotEmpty() }?.let {
-                        "${it.size} oturum silinemedi."
-                    },
+                    deleteReport = DeleteReport(deleted = deletedCount, total = ids.size)
+                        .takeIf { failedCount > 0 },
                 )
             }
-            if (failed.isEmpty()) refresh()
+            if (failedCount == 0) refresh()
         }
     }
+
+    fun onDeleteReportShown() = _uiState.update { it.copy(deleteReport = null) }
 }

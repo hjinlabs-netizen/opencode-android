@@ -37,8 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.model.ModelInfo
 import com.anomalyco.opencode.domain.model.ProviderConfig
 
@@ -63,7 +65,7 @@ fun ModelPickerSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(modifier = Modifier.padding(bottom = 16.dp)) {
             Text(
-                text = "Model seç",
+                text = stringResource(R.string.model_picker_title),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(start = 20.dp, bottom = 8.dp),
             )
@@ -73,12 +75,15 @@ fun ModelPickerSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 4.dp),
-                placeholder = { Text("Model veya sağlayıcı ara…") },
+                placeholder = { Text(stringResource(R.string.model_picker_search)) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
                         IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Aramayı temizle")
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = stringResource(R.string.model_picker_clear_search),
+                            )
                         }
                     }
                 },
@@ -96,7 +101,9 @@ fun ModelPickerSheet(
             }
             if (visible.isEmpty()) {
                 Text(
-                    text = if (query.isNotBlank()) "Eşleşen model yok" else "Model bulunamadı",
+                    text = stringResource(
+                        if (query.isNotBlank()) R.string.model_picker_no_match else R.string.model_picker_no_models,
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
@@ -108,7 +115,7 @@ fun ModelPickerSheet(
                     item(key = "hdr-${provider.providerId}") {
                         Text(
                             text = provider.displayName +
-                                if (provider.isConnected) "" else " (bağlı değil)",
+                                if (provider.isConnected) "" else stringResource(R.string.model_picker_disconnected),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 4.dp),
@@ -204,7 +211,7 @@ private fun ModelRow(
         } else if (model.isCurrent) {
             Icon(
                 imageVector = Icons.Filled.Check,
-                contentDescription = "Aktif model",
+                contentDescription = stringResource(R.string.model_picker_current),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp),
             )

@@ -53,5 +53,20 @@ class DiffViewModel @Inject constructor(
         _expanded.update { if (index in it) it - index else it + index }
     }
 
+    /**
+     * Expand-all / collapse-all (Sprint B): expands everything when any file
+     * is currently collapsed, otherwise collapses everything.
+     */
+    fun toggleAll() {
+        _expanded.update { currentlyExpanded ->
+            val allIndices = _uiState.value.files.indices.toSet()
+            if (currentlyExpanded.isEmpty() || currentlyExpanded.size < allIndices.size) {
+                allIndices
+            } else {
+                emptySet()
+            }
+        }
+    }
+
     fun onErrorShown() = _uiState.update { it.copy(error = null) }
 }

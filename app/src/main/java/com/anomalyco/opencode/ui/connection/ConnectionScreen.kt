@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -45,7 +46,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.model.ConnectionState
+import com.anomalyco.opencode.ui.theme.Danger
+import com.anomalyco.opencode.ui.theme.Success
 
 /**
  * Dashboard / Connection screen (Phase 1 entry point).
@@ -105,12 +109,12 @@ fun ConnectionScreenContent(
     ) {
         // Header
         Text(
-            text = "OpenCode",
+            text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = "Android thin client — OpenCode sunucunuza bağlanın",
+            text = stringResource(R.string.connection_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -129,8 +133,8 @@ fun ConnectionScreenContent(
                     value = state.url,
                     onValueChange = onUrlChange,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Sunucu adresi") },
-                    placeholder = { Text("http://192.168.1.10:4096") },
+                    label = { Text(stringResource(R.string.server_url_label)) },
+                    placeholder = { Text(stringResource(R.string.server_url_placeholder)) },
                     leadingIcon = { Icon(Icons.Filled.Link, contentDescription = null) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
@@ -143,7 +147,7 @@ fun ConnectionScreenContent(
                     value = state.token,
                     onValueChange = onTokenChange,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Token / şifre (opsiyonel)") },
+                    label = { Text(stringResource(R.string.token_label)) },
                     leadingIcon = { Icon(Icons.Filled.Key, contentDescription = null) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
@@ -177,7 +181,11 @@ fun ConnectionScreenContent(
                 Icon(Icons.Filled.Sync, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
             }
-            Text(if (busy) "Bağlanıyor…" else "Bağlantıyı Test Et & Kaydet")
+            Text(
+                stringResource(
+                    if (busy) R.string.connection_connecting else R.string.connection_test_save,
+                ),
+            )
         }
 
         if (state.connection is ConnectionState.Connected) {
@@ -188,21 +196,21 @@ fun ConnectionScreenContent(
             ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Oturumlara Geç")
+                Text(stringResource(R.string.connection_open_sessions))
             }
             OutlinedButton(
                 onClick = onDisconnect,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
             ) {
-                Text("Bağlantıyı Kes")
+                Text(stringResource(R.string.connection_disconnect))
             }
         }
 
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text = "Sunucu: `opencode serve --port 4096 --password <şifre>`\nveya masaüstü/CLI ile yerel ağınızda çalıştırın.",
+            text = stringResource(R.string.connection_footer),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -220,28 +228,29 @@ private fun ConnectionStatusCard(connection: ConnectionState) {
             Status(
                 MaterialTheme.colorScheme.surfaceVariant,
                 "🔌",
-                "Bağlı değil",
-                "Sunucu bilgilerini girip bağlantıyı test edin.",
+                stringResource(R.string.connection_not_connected),
+                stringResource(R.string.connection_not_connected_hint),
             )
         is ConnectionState.Connecting ->
             Status(
                 MaterialTheme.colorScheme.surfaceVariant,
                 "⏳",
-                "Bağlanıyor…",
-                "Sunucu sağlık kontrolü yapılıyor.",
+                stringResource(R.string.connection_connecting),
+                stringResource(R.string.connection_connecting_hint),
             )
         is ConnectionState.Connected ->
             Status(
-                Color(0xFF34D399),
+                Success,
                 "✅",
-                "Bağlandı",
-                connection.info.version?.let { "Sunucu sürümü: $it" } ?: "Sunucu yanıt verdi.",
+                stringResource(R.string.connection_connected),
+                connection.info.version?.let { stringResource(R.string.connection_version, it) }
+                    ?: stringResource(R.string.connection_healthy),
             )
         is ConnectionState.Error ->
             Status(
-                Color(0xFFFB5468),
+                Danger,
                 "❌",
-                "Bağlantı hatası",
+                stringResource(R.string.connection_error_title),
                 connection.message,
             )
     }

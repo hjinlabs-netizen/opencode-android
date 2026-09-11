@@ -38,10 +38,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.model.ConnectionState
 import com.anomalyco.opencode.domain.model.ThemeMode
 import com.anomalyco.opencode.ui.theme.Danger
@@ -74,12 +76,12 @@ fun SettingsScreen(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Ayarlar") },
+                title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Geri",
+                            contentDescription = stringResource(R.string.action_back),
                         )
                     }
                 },
@@ -110,8 +112,8 @@ fun SettingsScreen(
     if (confirmErase) {
         AlertDialog(
             onDismissRequest = { confirmErase = false },
-            title = { Text("Sunucu yapılandırmasını sil") },
-            text = { Text("Kayıtlı adres ve token silinecek, canlı bağlantı kapatılacak. Emin misiniz?") },
+            title = { Text(stringResource(R.string.settings_erase_title)) },
+            text = { Text(stringResource(R.string.settings_erase_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -119,11 +121,11 @@ fun SettingsScreen(
                         viewModel.clearServer()
                     },
                 ) {
-                    Text("Sil", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.sessions_delete_confirm), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { confirmErase = false }) { Text("Vazgeç") }
+                TextButton(onClick = { confirmErase = false }) { Text(stringResource(R.string.action_cancel)) }
             },
         )
     }
@@ -157,16 +159,20 @@ private fun ServerCard(
     onDisconnect: () -> Unit,
     onEraseRequested: () -> Unit,
 ) {
-    SectionCard("Sunucu") {
+    SectionCard(stringResource(R.string.settings_server_section)) {
         Column {
             Text(
-                text = state.serverUrl.ifBlank { "Yapılandırılmış sunucu yok" },
+                text = state.serverUrl.ifBlank { stringResource(R.string.settings_no_server) },
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.MiddleEllipsis,
             )
             Text(
-                text = if (state.hasToken) "Token: ${state.tokenMasked}" else "Token: yok",
+                text = if (state.hasToken) {
+                    stringResource(R.string.settings_token, state.tokenMasked)
+                } else {
+                    stringResource(R.string.settings_token_none)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -187,10 +193,11 @@ private fun ServerCard(
                 )
                 Text(
                     text = when (connection) {
-                        is ConnectionState.Connected -> "Bağlı"
-                        is ConnectionState.Error -> "Hata: ${connection.message}"
-                        ConnectionState.Connecting -> "Bağlanıyor…"
-                        ConnectionState.Disconnected -> "Bağlı değil"
+                        is ConnectionState.Connected -> stringResource(R.string.settings_state_connected)
+                        is ConnectionState.Error ->
+                            stringResource(R.string.settings_state_error, connection.message)
+                        ConnectionState.Connecting -> stringResource(R.string.settings_state_connecting)
+                        ConnectionState.Disconnected -> stringResource(R.string.settings_state_disconnected)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -203,12 +210,12 @@ private fun ServerCard(
                     CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.size(6.dp))
                 }
-                Text("Sağlık Kontrolü")
+                Text(stringResource(R.string.settings_health_check))
             }
-            OutlinedButton(onClick = onManageConnection) { Text("Bağlantıyı Yönet") }
+            OutlinedButton(onClick = onManageConnection) { Text(stringResource(R.string.settings_manage_connection)) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = onDisconnect) { Text("Bağlantıyı Kes") }
+            TextButton(onClick = onDisconnect) { Text(stringResource(R.string.settings_disconnect)) }
             TextButton(onClick = onEraseRequested) {
                 Icon(
                     imageVector = Icons.Filled.Delete,
@@ -217,7 +224,7 @@ private fun ServerCard(
                     tint = MaterialTheme.colorScheme.error,
                 )
                 Spacer(Modifier.size(4.dp))
-                Text("Yapılandırmayı Sil", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.settings_erase), color = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -225,7 +232,7 @@ private fun ServerCard(
 
 @Composable
 private fun ThemeCard(current: ThemeMode, onSelect: (ThemeMode) -> Unit) {
-    SectionCard("Görünüm") {
+    SectionCard(stringResource(R.string.settings_appearance_section)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ThemeMode.entries.forEach { mode ->
                 FilterChip(
@@ -233,11 +240,13 @@ private fun ThemeCard(current: ThemeMode, onSelect: (ThemeMode) -> Unit) {
                     onClick = { onSelect(mode) },
                     label = {
                         Text(
-                            text = when (mode) {
-                                ThemeMode.SYSTEM -> "Sistem"
-                                ThemeMode.DARK -> "Koyu"
-                                ThemeMode.LIGHT -> "Açık"
-                            },
+                            text = stringResource(
+                                when (mode) {
+                                    ThemeMode.SYSTEM -> R.string.settings_theme_system
+                                    ThemeMode.DARK -> R.string.settings_theme_dark
+                                    ThemeMode.LIGHT -> R.string.settings_theme_light
+                                },
+                            ),
                         )
                     },
                 )
@@ -248,14 +257,21 @@ private fun ThemeCard(current: ThemeMode, onSelect: (ThemeMode) -> Unit) {
 
 @Composable
 private fun DiagnosticsCard(state: SettingsUiState) {
-    SectionCard("Tanılama") {
-        DiagnosticRow("Uygulama sürümü", state.appVersion)
-        DiagnosticRow("Sunucu sürümü", state.serverVersion ?: "bilinmiyor")
+    SectionCard(stringResource(R.string.settings_diagnostics_section)) {
+        DiagnosticRow(stringResource(R.string.settings_app_version), state.appVersion)
         DiagnosticRow(
-            "Gecikme",
-            state.latencyMs?.let { "$it ms" } ?: "ölçülmedi",
+            stringResource(R.string.settings_server_version),
+            state.serverVersion ?: stringResource(R.string.unknown),
         )
-        DiagnosticRow("Etkin model", state.activeModel ?: "bilinmiyor")
+        DiagnosticRow(
+            stringResource(R.string.settings_latency),
+            state.latencyMs?.let { stringResource(R.string.settings_latency_value, it) }
+                ?: stringResource(R.string.settings_latency_unmeasured),
+        )
+        DiagnosticRow(
+            stringResource(R.string.settings_active_model),
+            state.activeModel ?: stringResource(R.string.unknown),
+        )
     }
 }
 

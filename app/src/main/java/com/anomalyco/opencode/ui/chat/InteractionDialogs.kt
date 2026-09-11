@@ -32,8 +32,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.model.PermissionDecision
 import com.anomalyco.opencode.domain.model.PermissionRequest
 import com.anomalyco.opencode.domain.model.QuestionRequest
@@ -58,33 +60,32 @@ fun PermissionDialog(
                 tint = MaterialTheme.colorScheme.primary,
             )
         },
-        title = { Text("İzin isteniyor") },
+        title = { Text(stringResource(R.string.permission_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = buildString {
-                        request.type.takeIf { it.isNotBlank() }?.let { append("Tür: $it · ") }
-                        append(request.description.ifBlank { "Bu işlemeye izin verilsin mi?" })
-                    },
+                    text = (request.type.takeIf { it.isNotBlank() }
+                        ?.let { stringResource(R.string.permission_type, it) } ?: "") +
+                        request.description.ifBlank { stringResource(R.string.permission_description) },
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                CodePreview("Dosya", request.path)
-                CodePreview("Komut", request.command)
-                CodePreview("Fark", request.diff, tall = true)
+                CodePreview(stringResource(R.string.permission_file), request.path)
+                CodePreview(stringResource(R.string.permission_command), request.command)
+                CodePreview(stringResource(R.string.permission_diff), request.diff, tall = true)
             }
         },
         confirmButton = {
             Button(onClick = { onDecision(PermissionDecision.ALLOW) }) {
-                Text("İzin ver")
+                Text(stringResource(R.string.permission_allow))
             }
         },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 OutlinedButton(onClick = { onDecision(PermissionDecision.ALLOW_ALWAYS) }) {
-                    Text("Her zaman")
+                    Text(stringResource(R.string.permission_allow_always))
                 }
                 TextButton(onClick = { onDecision(PermissionDecision.DENY) }) {
-                    Text("Reddet", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.permission_deny), color = MaterialTheme.colorScheme.error)
                 }
             }
         },
@@ -153,7 +154,7 @@ fun QuestionDialog(
                 tint = MaterialTheme.colorScheme.secondary,
             )
         },
-        title = { Text("Soru") },
+        title = { Text(stringResource(R.string.question_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(request.text, style = MaterialTheme.typography.bodyLarge)
@@ -194,7 +195,7 @@ fun QuestionDialog(
                         value = custom,
                         onValueChange = { custom = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Kendi cevabın (isteğe bağlı)") },
+                        label = { Text(stringResource(R.string.question_custom_hint)) },
                         singleLine = true,
                     )
                 }
@@ -205,11 +206,11 @@ fun QuestionDialog(
                 onClick = { onAnswer(answers) },
                 enabled = answers.isNotEmpty(),
             ) {
-                Text("Gönder")
+                Text(stringResource(R.string.action_send))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Sonra") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.question_later)) }
         },
     )
 }

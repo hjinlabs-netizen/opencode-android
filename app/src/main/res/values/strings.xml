@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Default (English) UI copy. Turkish lives in values-tr/strings.xml and is
+    the historical language of the app (see git history for the originals).
+    Data-layer exception messages (friendly API errors) are intentionally NOT
+    resources: they are produced outside the UI layer.
+-->
+<resources>
+    <string name="app_name" translatable="false">OpenCode</string>
+
+    <!-- Common / actions -->
+    <string name="action_back">Back</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_send">Send</string>
+    <string name="action_retry">Retry</string>
+    <string name="unknown">unknown</string>
+
+    <!-- Relative time -->
+    <string name="time_now">now</string>
+    <string name="time_minutes_ago">%1$d min ago</string>
+    <string name="time_hours_ago">%1$d h ago</string>
+    <string name="time_days_ago">%1$d d ago</string>
+
+    <!-- Connection screen -->
+    <string name="connection_subtitle">Android thin client — connect to your OpenCode server</string>
+    <string name="server_url_label">Server address</string>
+    <string name="server_url_placeholder" translatable="false">http://192.168.1.10:4096</string>
+    <string name="token_label">Token / password (optional)</string>
+    <string name="connection_not_connected">Not connected</string>
+    <string name="connection_not_connected_hint">Enter the server details and test the connection.</string>
+    <string name="connection_connecting">Connecting…</string>
+    <string name="connection_connecting_hint">Running server health check.</string>
+    <string name="connection_connected">Connected</string>
+    <string name="connection_version">Server version: %1$s</string>
+    <string name="connection_healthy">Server responded.</string>
+    <string name="connection_error_title">Connection error</string>
+    <string name="connection_test_save">Test &amp; Save Connection</string>
+    <string name="connection_disconnect">Disconnect</string>
+    <string name="connection_open_sessions">Continue to Sessions</string>
+    <string name="connection_footer">Server: `opencode serve --port 4096 --password &lt;secret&gt;`\nor run it on your LAN via desktop/CLI.</string>
+
+    <!-- Session list -->
+    <string name="sessions_title">Sessions</string>
+    <string name="sessions_new">New Session</string>
+    <string name="sessions_creating">Creating…</string>
+    <string name="sessions_default_title">New session</string>
+    <string name="sessions_empty_title">No sessions yet</string>
+    <string name="sessions_empty_body">Create a new session to get started.</string>
+    <string name="sessions_selected_count">%1$d selected</string>
+    <string name="sessions_exit_selection">Exit selection</string>
+    <string name="sessions_select_all">Select all</string>
+    <string name="sessions_delete_selected">Delete selected</string>
+    <string name="sessions_delete_title">Delete sessions</string>
+    <string name="sessions_delete_message">%1$d session(s) will be permanently deleted from the server. This cannot be undone.</string>
+    <string name="sessions_delete_confirm">Delete</string>
+    <string name="sessions_delete_report">%1$d of %2$d sessions deleted</string>
+
+    <!-- New session / directory dialogs -->
+    <string name="new_session_title">New session</string>
+    <string name="new_session_description">Choose the working directory for the session. Quick create uses the server\'s default directory.</string>
+    <string name="new_session_quick">Quick Create</string>
+    <string name="new_session_custom">Custom Folder…</string>
+    <string name="directory_title">Working folder</string>
+    <string name="directory_label">Folder path</string>
+    <string name="directory_placeholder" translatable="false">C:\\Users\\you\\Desktop\\project</string>
+    <string name="directory_recent">Recently used</string>
+    <string name="directory_create">Create</string>
+    <string name="directory_validating">Validating…</string>
+
+    <!-- Chat -->
+    <string name="chat_session_fallback">Session</string>
+    <string name="chat_model_select">Select model</string>
+    <string name="chat_model_loading">Loading model…</string>
+    <string name="chat_files">Files</string>
+    <string name="chat_changes">Changes</string>
+    <string name="chat_pending_requests">Pending requests</string>
+    <string name="chat_input_hint">Type a message…</string>
+    <string name="chat_model_working">Model is working…</string>
+    <string name="chat_role_you">You</string>
+    <string name="chat_role_assistant">Assistant</string>
+    <string name="chat_typing">Answering…</string>
+    <string name="stream_disconnected">No connection</string>
+    <string name="stream_connecting">Connecting…</string>
+    <string name="stream_connected">Live</string>
+    <string name="stream_error">Dropped — reconnecting</string>
+
+    <!-- Message part cards -->
+    <string name="part_thinking">Thinking process</string>
+    <string name="part_collapse">Collapse</string>
+    <string name="part_expand">Expand</string>
+    <string name="part_arguments">Arguments</string>
+    <string name="part_step_default">Step</string>
+    <string name="status_pending">Pending</string>
+    <string name="status_running">Running</string>
+    <string name="status_completed">Completed</string>
+    <string name="status_error">Error</string>
+    <string name="exit_code">exit %1$d</string>
+
+    <!-- Model picker -->
+    <string name="model_picker_title">Select model</string>
+    <string name="model_picker_search">Search model or provider…</string>
+    <string name="model_picker_clear_search">Clear search</string>
+    <string name="model_picker_no_match">No matching model</string>
+    <string name="model_picker_no_models">No models found</string>
+    <string name="model_picker_disconnected"> (disconnected)</string>
+    <string name="model_picker_current">Current model</string>
+
+    <!-- Permission / question dialogs -->
+    <string name="permission_title">Permission required</string>
+    <string name="permission_type">Type: %1$s · </string>
+    <string name="permission_description">Allow this operation?</string>
+    <string name="permission_file">File</string>
+    <string name="permission_command">Command</string>
+    <string name="permission_diff">Diff</string>
+    <string name="permission_allow">Allow</string>
+    <string name="permission_allow_always">Always</string>
+    <string name="permission_deny">Deny</string>
+    <string name="question_title">Question</string>
+    <string name="question_custom_hint">Your own answer (optional)</string>
+    <string name="question_later">Later</string>
+
+    <!-- File explorer -->
+    <string name="files_title">Project files</string>
+    <string name="files_add_to_chat">Add to chat</string>
+    <string name="files_empty_file">(empty file)</string>
+    <string name="files_empty_folder">Empty folder</string>
+    <string name="files_search_hint">Search files…</string>
+    <string name="files_search_clear">Clear</string>
+
+    <!-- Diff viewer -->
+    <string name="diff_title">Changes</string>
+    <string name="diff_none_title">No changes</string>
+    <string name="diff_none_body">No files differ from HEAD in the working tree.</string>
+    <string name="diff_expand_all">Expand all</string>
+    <string name="diff_collapse_all">Collapse all</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_server_section">Server</string>
+    <string name="settings_no_server">No configured server</string>
+    <string name="settings_token">Token: %1$s</string>
+    <string name="settings_token_none">Token: none</string>
+    <string name="settings_state_connected">Connected</string>
+    <string name="settings_state_connecting">Connecting…</string>
+    <string name="settings_state_disconnected">Not connected</string>
+    <string name="settings_state_error">Error: %1$s</string>
+    <string name="settings_health_check">Health Check</string>
+    <string name="settings_manage_connection">Manage Connection</string>
+    <string name="settings_disconnect">Disconnect</string>
+    <string name="settings_erase">Delete Configuration</string>
+    <string name="settings_erase_title">Delete server configuration</string>
+    <string name="settings_erase_message">The saved address and token will be deleted and the live connection closed. Are you sure?</string>
+    <string name="settings_appearance_section">Appearance</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_diagnostics_section">Diagnostics</string>
+    <string name="settings_app_version">App version</string>
+    <string name="settings_server_version">Server version</string>
+    <string name="settings_latency">Latency</string>
+    <string name="settings_latency_value">%1$d ms</string>
+    <string name="settings_latency_unmeasured">not measured</string>
+    <string name="settings_active_model">Active model</string>
+</resources>

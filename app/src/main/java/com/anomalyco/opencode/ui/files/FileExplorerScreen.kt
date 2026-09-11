@@ -25,11 +25,13 @@ import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -43,12 +45,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.model.FileNode
 
 /**
@@ -87,7 +91,7 @@ fun FileExplorerScreen(
                 title = {
                     Text(
                         text = state.openFile?.path
-                            ?: state.path.ifBlank { "Proje dosyaları" },
+                            ?: state.path.ifBlank { stringResource(R.string.files_title) },
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.MiddleEllipsis,
@@ -107,7 +111,7 @@ fun FileExplorerScreen(
                             } else {
                                 Icons.AutoMirrored.Filled.ArrowBack
                             },
-                            contentDescription = "Geri",
+                            contentDescription = stringResource(R.string.action_back),
                         )
                     }
                 },
@@ -117,7 +121,7 @@ fun FileExplorerScreen(
                         IconButton(onClick = { onAddToChat(open.path) }) {
                             Icon(
                                 imageVector = Icons.Filled.AddComment,
-                                contentDescription = "Sohbete ekle",
+                                contentDescription = stringResource(R.string.files_add_to_chat),
                             )
                         }
                     }
@@ -136,7 +140,7 @@ fun FileExplorerScreen(
                     .padding(14.dp),
             ) {
                 Text(
-                    text = file.content.ifBlank { "(boş dosya)" },
+                    text = file.content.ifBlank { stringResource(R.string.files_empty_file) },
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
@@ -158,24 +162,60 @@ fun FileExplorerScreen(
                 contentAlignment = Alignment.Center,
             ) { CircularProgressIndicator() }
 
-            else -> LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                items(state.entries, key = { it.path }) { node ->
-                    FileNodeRow(node = node, onClick = { viewModel.onNodeClick(node) })
-                }
-                if (state.entries.isEmpty()) {
-                    item {
-                        Text(
-                            text = "Boş klasör",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp),
+            else -> {
+                val visible = filterFileNodes(state.entries, state.query)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                ) {
+                    if (state.entries.isNotEmpty()) {
+                        OutlinedTextField(
+                            value = state.query,
+                            onValueChange = viewModel::onQueryChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                            placeholder = { Text(stringResource(R.string.files_search_hint)) },
+                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                            trailingIcon = {
+                                if (state.query.isNotEmpty()) {
+                                    IconButton(onClick = viewModel::clearQuery) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Close,
+                                            contentDescription = stringResource(R.string.files_search_clear),
+                                        )
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
                         )
+                    }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        items(visible, key = { it.path }) { node ->
+                            FileNodeRow(node = node, onClick = { viewModel.onNodeClick(node) })
+                        }
+                        if (visible.isEmpty()) {
+                            item {
+                                Text(
+                                    text = stringResource(
+                                        if (state.query.isNotBlank() && state.entries.isNotEmpty()) {
+                                            R.string.model_picker_no_match
+                                        } else {
+                                            R.string.files_empty_folder
+                                        },
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(16.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }

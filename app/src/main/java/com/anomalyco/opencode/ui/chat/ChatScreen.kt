@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.ui.chat
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,17 +53,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.MessagePart
 import com.anomalyco.opencode.domain.model.MessageRole
 import com.anomalyco.opencode.domain.model.StreamStatus
-import com.anomalyco.opencode.ui.common.formatRelativeTime
+import com.anomalyco.opencode.ui.common.relativeTimeText
 import com.anomalyco.opencode.ui.theme.Success
 import com.anomalyco.opencode.ui.theme.Warning
 
@@ -108,7 +111,7 @@ fun ChatScreen(
                 title = {
                     Column {
                         Text(
-                            text = state.sessionTitle.ifBlank { "Oturum" },
+                            text = state.sessionTitle.ifBlank { stringResource(R.string.chat_session_fallback) },
                             style = MaterialTheme.typography.titleMedium,
                             maxLines = 1,
                         )
@@ -126,20 +129,21 @@ fun ChatScreen(
                                 },
                         ) {
                             Text(
-                                text = state.currentModel?.displayName
-                                    ?: if (state.isLoadingProviders) "Model yükleniyor…" else "Model seç",
+                                text = state.currentModel?.displayName ?: stringResource(
+                                    if (state.isLoadingProviders) R.string.chat_model_loading else R.string.chat_model_select,
+                                ),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.tertiary,
                                 maxLines = 1,
                             )
                             Icon(
                                 imageVector = Icons.Filled.ArrowDropDown,
-                                contentDescription = "Modeli değiştir",
+                                contentDescription = stringResource(R.string.chat_model_select),
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.tertiary,
                             )
                             Text(
-                                text = "· ${state.streamStatus.label()}",
+                                text = "· ${stringResource(state.streamStatus.labelRes())}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = streamStatusColor(state.streamStatus),
                                 maxLines = 1,
@@ -151,7 +155,7 @@ fun ChatScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Geri",
+                            contentDescription = stringResource(R.string.action_back),
                         )
                     }
                 },
@@ -164,18 +168,18 @@ fun ChatScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.NotificationsActive,
-                                contentDescription = "Bekleyen istekler",
+                                contentDescription = stringResource(R.string.chat_pending_requests),
                             )
                         }
                     }
                     IconButton(onClick = { onOpenFiles(state.directory) }) {
-                        Icon(Icons.Filled.Folder, contentDescription = "Dosyalar")
+                        Icon(Icons.Filled.Folder, contentDescription = stringResource(R.string.chat_files))
                     }
                     IconButton(onClick = onOpenDiff) {
-                        Icon(Icons.Filled.Difference, contentDescription = "Değişiklikler")
+                        Icon(Icons.Filled.Difference, contentDescription = stringResource(R.string.chat_changes))
                     }
                     IconButton(onClick = viewModel::refresh) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Yenile")
+                        Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.action_refresh))
                     }
                 },
             )
@@ -316,13 +320,13 @@ private fun MessageBubble(message: ChatMessage, isLive: Boolean) {
             modifier = Modifier.padding(horizontal = 6.dp),
         ) {
             Text(
-                text = if (isUser) "Sen" else "Asistan",
+                text = stringResource(if (isUser) R.string.chat_role_you else R.string.chat_role_assistant),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (message.createdAt > 0L) {
                 Text(
-                    text = " · ${formatRelativeTime(message.createdAt)}",
+                    text = " · ${relativeTimeText(message.createdAt)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -344,7 +348,7 @@ private fun TypingDots() {
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = "Yanıtlanıyor…",
+            text = stringResource(R.string.chat_typing),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -371,7 +375,7 @@ private fun ChatInputBar(
                 AgentToggle(selected = agent, onSelect = onAgentChange)
                 if (isBusy && !isSending) {
                     Text(
-                        text = "Model çalışıyor…",
+                        text = stringResource(R.string.chat_model_working),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -390,7 +394,7 @@ private fun ChatInputBar(
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(max = 140.dp),
-                    placeholder = { Text("Mesaj yazın…") },
+                    placeholder = { Text(stringResource(R.string.chat_input_hint)) },
                     shape = RoundedCornerShape(22.dp),
                     maxLines = 5,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -409,7 +413,7 @@ private fun ChatInputBar(
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Gönder",
+                            contentDescription = stringResource(R.string.action_send),
                         )
                     }
                 }
@@ -418,11 +422,12 @@ private fun ChatInputBar(
     }
 }
 
-private fun StreamStatus.label(): String = when (this) {
-    StreamStatus.Disconnected -> "Bağlantı yok"
-    StreamStatus.Connecting -> "Bağlanıyor…"
-    StreamStatus.Connected -> "Canlı"
-    is StreamStatus.Error -> "Koptu — yeniden bağlanılıyor"
+@StringRes
+private fun StreamStatus.labelRes(): Int = when (this) {
+    StreamStatus.Disconnected -> R.string.stream_disconnected
+    StreamStatus.Connecting -> R.string.stream_connecting
+    StreamStatus.Connected -> R.string.stream_connected
+    is StreamStatus.Error -> R.string.stream_error
 }
 
 @Composable

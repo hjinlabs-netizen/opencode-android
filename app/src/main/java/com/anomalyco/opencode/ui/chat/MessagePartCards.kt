@@ -43,9 +43,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.model.MessagePart
 import com.anomalyco.opencode.domain.model.StepState
 import com.anomalyco.opencode.domain.model.ToolStatus
@@ -102,7 +104,7 @@ fun ReasoningPartCard(part: MessagePart.ReasoningPart, modifier: Modifier = Modi
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "Düşünce süreci",
+                text = stringResource(R.string.part_thinking),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
@@ -114,7 +116,9 @@ fun ReasoningPartCard(part: MessagePart.ReasoningPart, modifier: Modifier = Modi
             IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(28.dp)) {
                 Icon(
                     imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = if (expanded) "Daralt" else "Genişlet",
+                    contentDescription = stringResource(
+                        if (expanded) R.string.part_collapse else R.string.part_expand,
+                    ),
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -163,7 +167,7 @@ fun ToolCallPartCard(part: MessagePart.ToolCallPart, modifier: Modifier = Modifi
             if (hasArgs) {
                 Icon(
                     imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = "Argümanlar",
+                    contentDescription = stringResource(R.string.part_arguments),
                     modifier = Modifier
                         .padding(start = 4.dp)
                         .size(18.dp),
@@ -207,7 +211,7 @@ private fun ToolStatusChip(status: ToolStatus) {
             Spacer(Modifier.width(5.dp))
         }
         Text(
-            text = status.label(),
+            text = stringResource(status.labelRes()),
             style = MaterialTheme.typography.labelSmall,
             color = statusAccentColor(status).takeIf { it != color } ?: color,
         )
@@ -226,11 +230,12 @@ private fun statusAccentColor(status: ToolStatus): Color = when (status) {
 private fun statusContainerColor(status: ToolStatus): Color =
     statusAccentColor(status).copy(alpha = 0.18f)
 
-private fun ToolStatus.label(): String = when (this) {
-    ToolStatus.PENDING -> "Bekliyor"
-    ToolStatus.RUNNING -> "Çalışıyor"
-    ToolStatus.COMPLETED -> "Tamamlandı"
-    ToolStatus.ERROR -> "Hata"
+@androidx.annotation.StringRes
+private fun ToolStatus.labelRes(): Int = when (this) {
+    ToolStatus.PENDING -> R.string.status_pending
+    ToolStatus.RUNNING -> R.string.status_running
+    ToolStatus.COMPLETED -> R.string.status_completed
+    ToolStatus.ERROR -> R.string.status_error
 }
 
 // ---- Shell (monospace output + exit code) ----------------------------------
@@ -284,7 +289,7 @@ fun ShellPartCard(part: MessagePart.ShellPart, modifier: Modifier = Modifier) {
 private fun ExitBadge(code: Int) {
     val color = if (code == 0) Success else Danger
     Text(
-        text = "exit $code",
+        text = stringResource(R.string.exit_code, code),
         style = MaterialTheme.typography.labelSmall,
         color = color,
         modifier = Modifier
@@ -318,7 +323,7 @@ fun StepPartCard(part: MessagePart.StepPart, modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = part.description.ifBlank { "Adım" },
+                text = part.description.ifBlank { stringResource(R.string.part_step_default) },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),

@@ -128,6 +128,53 @@ class MessageAssemblerTest {
     }
 
     @Test
+    fun `blank part ids merge into the trailing same-kind part instead of a shared empty id`() {
+        var messages = emptyList<ChatMessage>()
+        // Server omits partID entirely.
+        messages = MessageAssembler.apply(messages, session, StreamEvent.TextDelta(session, "", "al"))
+        messages = MessageAssembler.apply(messages, session, StreamEvent.TextDelta(session, "", "pha"))
+        val textParts = live(messages).parts.filterIsInstance<MessagePart.TextPart>()
+        assertEquals(1, textParts.size)
+        assertEquals("alpha", textParts.single().content)
+
+        // A keyed part still opens its own bubble.
+        messages = MessageAssembler.apply(messages, session, StreamEvent.TextDelta(session, "p2", "!"))
+        assertEquals(2, live(messages).parts.size)
+
+        // An unkeyed delta continues the LAST part, never a keyed-"" collapse.
+        messages = MessageAssembler.apply(messages, session, StreamEvent.TextDelta(session, "", "?"))
+        assertEquals(
+            listOf("alpha", "!?"),
+            live(messages).parts.filterIsInstance<MessagePart.TextPart>().map { it.content },
+        )
+    }
+
+    @Test
+    fun `blank-id reasoning continues its own tail and never joins a text part`() {
+        var messages = emptyList<ChatMessage>()
+        messages = MessageAssembler.apply(messages, session, StreamEvent.TextDelta(session, "", "answer"))
+        messages = MessageAssembler.apply(messages, session, StreamEvent.ReasoningDelta(session, "", "think"))
+        messages = MessageAssembler.apply(messages, session, StreamEvent.ReasoningDelta(session, "", "ing"))
+
+        val parts = live(messages).parts
+        assertEquals(2, parts.size)
+        assertEquals("answer", (parts[0] as MessagePart.TextPart).content)
+        assertEquals("thinking", (parts[1] as MessagePart.ReasoningPart).thinking)
+    }
+
+    @Test
+    fun `explicit part ids still create distinct parts and never touch the tail`() {
+        var messages = emptyList<ChatMessage>()
+        messages = MessageAssembler.apply(messages, session, StreamEvent.TextDelta(session, "a", "1"))
+        messages = MessageAssembler.apply(messages, session, StreamEvent.TextDelta(session, "b", "2"))
+        messages = MessageAssembler.apply(messages, session, StreamEvent.TextDelta(session, "a", "3"))
+
+        val parts = live(messages).parts.filterIsInstance<MessagePart.TextPart>()
+        assertEquals(listOf("13", "2"), parts.map { it.content })
+        assertEquals(listOf("a", "b"), parts.map { it.id })
+    }
+
+    @Test
     fun `rotateLiveMessage renames the live bubble so the next turn starts fresh`() {
         var messages = listOf(prior)
         messages = MessageAssembler.apply(messages, session, StreamEvent.TextDelta(session, "p1", "one"))

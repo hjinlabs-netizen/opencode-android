@@ -23,9 +23,10 @@
 
 ## 1. Critical & High-Priority Technical Debt (P0)
 
-> **Sprint A status (this iteration):** P0-1 ✅ resolved · P0-2 ✅ resolved ·
-> P0-3 ✅ resolved · P0-4 ⬜ open · P0-5 ✅ resolved · P0-6 ⬜ open ·
-> P0-7 ⬜ open · P1 directory pre-validation ✅ resolved.
+> **Sprint A status:** P0-1 ✅ · P0-2 ✅ · P0-3 ✅ · P0-5 ✅ · directory pre-validation ✅.
+> **Sprint B status:** P0-4 ✅ (tail-buffer key fallback) · P0-7 ✅ (X-of-Y delete report) ·
+> i18n ✅ (en + tr) · file-explorer search ✅ · diff expand/collapse-all ✅.
+> **Still open:** P0-6 (instrumentation/SSE device tests) · §5 CI + lint · endpoint probe caching (P2-2).
 
 1. **[RESOLVED] Server-resolution inconsistency (cold-start race).**
    `SessionRepositoryImpl` now resolves through the shared
@@ -45,12 +46,11 @@
    before and after the history fetch). Regression test:
    `late resolution of an older send cannot clobber the newer turn`.
 
-4. **[OPEN] Part-merge key degenerates when the server omits `partID`.**
-   `MessageAssembler` merges text/reasoning by `part.id`; events with blank
-   ids all fold into one `TextPart(id = "")`. Verified against current
-   payloads, unverified against all builds.
-   → Fall back to `messageID + index` keying, or reject blank-partId deltas
-   into a per-message tail.
+4. **[RESOLVED] Part-merge key degenerates when the server omits `partID`.**
+   `MessageAssembler.mergeTargetIndex` now routes blank-`partID` deltas into a
+   per-message *tail buffer* (the trailing same-kind part) instead of collapsing
+   them into one `id = ""` part; keyed deltas still open distinct parts.
+   Covered by three `MessageAssemblerTest` cases.
 
 5. **[RESOLVED] Late subscribers silently lose events (by design, now mitigated).**
    SharedFlow `replay=0`: deltas missed while the chat entry was recreated are
@@ -63,9 +63,12 @@
    → Add an AndroidTest hitting a local mock-web-server (MockWebServer) SSE endpoint, or a CIO-engine
    based integration test.
 
-7. **Sequential batch delete without atomicity.**
-   `confirmDelete()` loops N single DELETEs; a mid-loop failure leaves a partial state (handled,
-   but reported only as a count). No pagination on `GET /session` either — large servers load fully.
+7. **[RESOLVED] Sequential batch delete without atomicity.**
+   `SessionListViewModel.confirmDelete()` accumulates successes/failures
+   independently (one failure never aborts the batch), drops successful rows
+   optimistically via the repository cache, and reports a structured
+   `DeleteReport(deleted, total)` rendered as "X of Y deleted" — failed rows
+   stay visible. `GET /session` still has no pagination (tracked under P1).
 
 ---
 
@@ -73,10 +76,8 @@
 
 - **`FileRepository.diffFile(path)` is dead code** — the diff screen only uses `workingTreeDiff()`.
   Wire per-file deep links (tap a tool card referencing a file → its diff).
-- **File explorer**: no search/filter, no pull-to-refresh, no per-directory cache (re-probes the
-  endpoint chain on every navigation), row-level "add to chat" (preview-only today), long-press
-  context menu.
-- **Diff viewer**: no expand/collapse-all, no hunks virtualization beyond LazyColumn, no copy-patch.
+- **File explorer**: ✅ name search/filter (`filterFileNodes`) shipped in Sprint B. Remaining: pull-to-refresh, per-directory cache (re-probes the endpoint chain on every navigation), row-level "add to chat" (preview-only today), long-press context menu.
+- **Diff viewer**: ✅ expand-all / collapse-all toggle shipped (Sprint B). Remaining: hunks virtualization beyond LazyColumn, copy-patch.
 - **[RESOLVED] New-session dialog**: directory is now pre-validated through the
   `/find` endpoint chain before `POST /session`; invalid paths surface as an
   inline field error (`directoryError`) instead of a raw 400 snackbar.
@@ -88,8 +89,9 @@
 - **Session list**: no rename/archive, no pagination, no per-session directory badge.
 - **Settings**: latency/server-version only after a manual probe; active model loads once at screen
   entry (no refresh after model switch); no cache-clear action.
-- **i18n**: all strings are hard-coded Turkish in composables; extract to `strings.xml` (en/tr)
-  before adding any new copy.
+- **i18n**: ✅ all screen strings extracted to `values/strings.xml` (English default) +
+  `values-tr/strings.xml` (Turkish) in Sprint B. Data-layer friendly exception messages
+  (`ApiErrors`, `NoServerConfigured`) intentionally stay hard-coded outside the resource system.
 - **`ConnectionStateManager.force()`** debug helper still public — gate behind `BuildConfig.DEBUG`
   or delete.
 

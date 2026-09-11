@@ -28,7 +28,11 @@ object MessageAssembler {
     fun apply(messages: List<ChatMessage>, sessionId: String, event: StreamEvent): List<ChatMessage> =
         when (event) {
             is StreamEvent.TextDelta -> withLive(messages, sessionId) { live ->
-                val index = live.parts.indexOfFirst { it is MessagePart.TextPart && it.id == event.partId }
+                val index = mergeTargetIndex(
+                    parts = live.parts,
+                    explicitId = event.partId,
+                    matches = { it is MessagePart.TextPart },
+                )
                 val parts = if (index == -1) {
                     live.parts + MessagePart.TextPart(content = event.delta, id = event.partId)
                 } else {
@@ -41,7 +45,11 @@ object MessageAssembler {
             }
 
             is StreamEvent.ReasoningDelta -> withLive(messages, sessionId) { live ->
-                val index = live.parts.indexOfFirst { it is MessagePart.ReasoningPart && it.id == event.partId }
+                val index = mergeTargetIndex(
+                    parts = live.parts,
+                    explicitId = event.partId,
+                    matches = { it is MessagePart.ReasoningPart },
+                )
                 val parts = if (index == -1) {
                     live.parts + MessagePart.ReasoningPart(thinking = event.delta, id = event.partId)
                 } else {
@@ -148,6 +156,32 @@ object MessageAssembler {
     }
 
     // ---- helpers ----
+
+    /**
+     * Which existing part a delta should merge into (index), or -1 to append
+     * a new part.
+     *
+     * P0-4: servers that omit `partID` used to collapse every blank-keyed
+     * delta into one `id = ""` part — corrupting unrelated parts. Without a
+     * stable key the only deterministic target is the *trailing* part of the
+     * same kind (a per-message tail buffer): continuation keeps working and
+     * a later keyed part still opens its own bubble.
+     */
+    private fun mergeTargetIndex(
+        parts: List<MessagePart>,
+        explicitId: String,
+        matches: (MessagePart) -> Boolean,
+    ): Int = if (explicitId.isNotBlank()) {
+        parts.indexOfFirst { matches(it) && partIdOf(it) == explicitId }
+    } else {
+        parts.indexOfLast(matches)
+    }
+
+    private fun partIdOf(part: MessagePart): String = when (part) {
+        is MessagePart.TextPart -> part.id
+        is MessagePart.ReasoningPart -> part.id
+        else -> ""
+    }
 
     private inline fun withLive(
         messages: List<ChatMessage>,

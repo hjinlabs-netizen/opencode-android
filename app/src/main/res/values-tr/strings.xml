@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Turkish (default historical language of the app). Keys mirror values/strings.xml. -->
+<resources>
+    <!-- Common / actions -->
+    <string name="action_back">Geri</string>
+    <string name="action_refresh">Yenile</string>
+    <string name="action_settings">Ayarlar</string>
+    <string name="action_cancel">Vazgeç</string>
+    <string name="action_send">Gönder</string>
+    <string name="action_retry">Yeniden dene</string>
+    <string name="unknown">bilinmiyor</string>
+
+    <!-- Relative time -->
+    <string name="time_now">şimdi</string>
+    <string name="time_minutes_ago">%1$d dk önce</string>
+    <string name="time_hours_ago">%1$d sa önce</string>
+    <string name="time_days_ago">%1$d gün önce</string>
+
+    <!-- Connection screen -->
+    <string name="connection_subtitle">Android ince istemci — OpenCode sunucunuza bağlanın</string>
+    <string name="server_url_label">Sunucu adresi</string>
+    <string name="token_label">Token / şifre (opsiyonel)</string>
+    <string name="connection_not_connected">Bağlı değil</string>
+    <string name="connection_not_connected_hint">Sunucu bilgilerini girip bağlantıyı test edin.</string>
+    <string name="connection_connecting">Bağlanıyor…</string>
+    <string name="connection_connecting_hint">Sunucu sağlık kontrolü yapılıyor.</string>
+    <string name="connection_connected">Bağlandı</string>
+    <string name="connection_version">Sunucu sürümü: %1$s</string>
+    <string name="connection_healthy">Sunucu yanıt verdi.</string>
+    <string name="connection_error_title">Bağlantı hatası</string>
+    <string name="connection_test_save">Bağlantıyı Test Et &amp; Kaydet</string>
+    <string name="connection_disconnect">Bağlantıyı Kes</string>
+    <string name="connection_open_sessions">Oturumlara Geç</string>
+    <string name="connection_footer">Sunucu: `opencode serve --port 4096 --password &lt;şifre&gt;`\nveya masaüstü/CLI ile yerel ağınızda çalıştırın.</string>
+
+    <!-- Session list -->
+    <string name="sessions_title">Oturumlar</string>
+    <string name="sessions_new">Yeni Oturum</string>
+    <string name="sessions_creating">Oluşturuluyor…</string>
+    <string name="sessions_default_title">Yeni oturum</string>
+    <string name="sessions_empty_title">Henüz oturum yok</string>
+    <string name="sessions_empty_body">Başlamak için yeni bir oturum oluşturun.</string>
+    <string name="sessions_selected_count">%1$d seçili</string>
+    <string name="sessions_exit_selection">Seçimi bitir</string>
+    <string name="sessions_select_all">Tümünü seç</string>
+    <string name="sessions_delete_selected">Seçilenleri sil</string>
+    <string name="sessions_delete_title">Oturumları sil</string>
+    <string name="sessions_delete_message">%1$d oturum sunucudan kalıcı olarak silinecek. Bu işlem geri alınamaz.</string>
+    <string name="sessions_delete_confirm">Sil</string>
+    <string name="sessions_delete_report">%2$d oturumdan %1$d tanesi silindi</string>
+
+    <!-- New session / directory dialogs -->
+    <string name="new_session_title">Yeni oturum</string>
+    <string name="new_session_description">Oturumun çalışacağı klasörü seçin. Hızlı oluşturma, sunucunun varsayılan çalışma dizinini kullanır.</string>
+    <string name="new_session_quick">Hızlı Oluştur</string>
+    <string name="new_session_custom">Özel Klasör…</string>
+    <string name="directory_title">Çalışma klasörü</string>
+    <string name="directory_label">Klasör yolu</string>
+    <string name="directory_recent">Son kullanılanlar</string>
+    <string name="directory_create">Oluştur</string>
+    <string name="directory_validating">Doğrulanıyor…</string>
+
+    <!-- Chat -->
+    <string name="chat_session_fallback">Oturum</string>
+    <string name="chat_model_select">Model seç</string>
+    <string name="chat_model_loading">Model yükleniyor…</string>
+    <string name="chat_files">Dosyalar</string>
+    <string name="chat_changes">Değişiklikler</string>
+    <string name="chat_pending_requests">Bekleyen istekler</string>
+    <string name="chat_input_hint">Mesaj yazın…</string>
+    <string name="chat_model_working">Model çalışıyor…</string>
+    <string name="chat_role_you">Sen</string>
+    <string name="chat_role_assistant">Asistan</string>
+    <string name="chat_typing">Yanıtlanıyor…</string>
+    <string name="stream_disconnected">Bağlantı yok</string>
+    <string name="stream_connecting">Bağlanıyor…</string>
+    <string name="stream_connected">Canlı</string>
+    <string name="stream_error">Koptu — yeniden bağlanılıyor</string>
+
+    <!-- Message part cards -->
+    <string name="part_thinking">Düşünce süreci</string>
+    <string name="part_collapse">Daralt</string>
+    <string name="part_expand">Genişlet</string>
+    <string name="part_arguments">Argümanlar</string>
+    <string name="part_step_default">Adım</string>
+    <string name="status_pending">Bekliyor</string>
+    <string name="status_running">Çalışıyor</string>
+    <string name="status_completed">Tamamlandı</string>
+    <string name="status_error">Hata</string>
+    <string name="exit_code">exit %1$d</string>
+
+    <!-- Model picker -->
+    <string name="model_picker_title">Model seç</string>
+    <string name="model_picker_search">Model veya sağlayıcı ara…</string>
+    <string name="model_picker_clear_search">Aramayı temizle</string>
+    <string name="model_picker_no_match">Eşleşen model yok</string>
+    <string name="model_picker_no_models">Model bulunamadı</string>
+    <string name="model_picker_disconnected"> (bağlı değil)</string>
+    <string name="model_picker_current">Aktif model</string>
+
+    <!-- Permission / question dialogs -->
+    <string name="permission_title">İzin isteniyor</string>
+    <string name="permission_type">Tür: %1$s · </string>
+    <string name="permission_description">Bu işlemeye izin verilsin mi?</string>
+    <string name="permission_file">Dosya</string>
+    <string name="permission_command">Komut</string>
+    <string name="permission_diff">Fark</string>
+    <string name="permission_allow">İzin ver</string>
+    <string name="permission_allow_always">Her zaman</string>
+    <string name="permission_deny">Reddet</string>
+    <string name="question_title">Soru</string>
+    <string name="question_custom_hint">Kendi cevabın (isteğe bağlı)</string>
+    <string name="question_later">Sonra</string>
+
+    <!-- File explorer -->
+    <string name="files_title">Proje dosyaları</string>
+    <string name="files_add_to_chat">Sohbete ekle</string>
+    <string name="files_empty_file">(boş dosya)</string>
+    <string name="files_empty_folder">Boş klasör</string>
+    <string name="files_search_hint">Dosyada ara…</string>
+    <string name="files_search_clear">Temizle</string>
+
+    <!-- Diff viewer -->
+    <string name="diff_title">Değişiklikler</string>
+    <string name="diff_none_title">Değişiklik yok</string>
+    <string name="diff_none_body">Çalışma ağacında HEAD\'e göre değişen dosya bulunmuyor.</string>
+    <string name="diff_expand_all">Tümünü genişlet</string>
+    <string name="diff_collapse_all">Tümünü daralt</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Ayarlar</string>
+    <string name="settings_server_section">Sunucu</string>
+    <string name="settings_no_server">Yapılandırılmış sunucu yok</string>
+    <string name="settings_token">Token: %1$s</string>
+    <string name="settings_token_none">Token: yok</string>
+    <string name="settings_state_connected">Bağlı</string>
+    <string name="settings_state_connecting">Bağlanıyor…</string>
+    <string name="settings_state_disconnected">Bağlı değil</string>
+    <string name="settings_state_error">Hata: %1$s</string>
+    <string name="settings_health_check">Sağlık Kontrolü</string>
+    <string name="settings_manage_connection">Bağlantıyı Yönet</string>
+    <string name="settings_disconnect">Bağlantıyı Kes</string>
+    <string name="settings_erase">Yapılandırmayı Sil</string>
+    <string name="settings_erase_title">Sunucu yapılandırmasını sil</string>
+    <string name="settings_erase_message">Kayıtlı adres ve token silinecek, canlı bağlantı kapatılacak. Emin misiniz?</string>
+    <string name="settings_appearance_section">Görünüm</string>
+    <string name="settings_theme_system">Sistem</string>
+    <string name="settings_theme_dark">Koyu</string>
+    <string name="settings_theme_light">Açık</string>
+    <string name="settings_diagnostics_section">Tanılama</string>
+    <string name="settings_app_version">Uygulama sürümü</string>
+    <string name="settings_server_version">Sunucu sürümü</string>
+    <string name="settings_latency">Gecikme</string>
+    <string name="settings_latency_value">%1$d ms</string>
+    <string name="settings_latency_unmeasured">ölçülmedi</string>
+    <string name="settings_active_model">Etkin model</string>
+</resources>
