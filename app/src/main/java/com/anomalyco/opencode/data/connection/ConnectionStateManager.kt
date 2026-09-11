@@ -7,7 +7,6 @@ import com.anomalyco.opencode.domain.repository.ConnectionRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -52,7 +51,4 @@ class ConnectionStateManager @Inject constructor(
         lastConnectedConfig = null
         _state.value = ConnectionState.Disconnected
     }
-
-    /** Convenience for debugging/preview: force an arbitrary state. */
-    fun force(state: ConnectionState) = _state.update { state }
 }

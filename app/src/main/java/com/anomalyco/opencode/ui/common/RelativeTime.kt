@@ -32,7 +32,7 @@ internal fun computeRelativeTime(epochMillis: Long, nowMillis: Long = System.cur
         minutes < 60 -> RelativeTime.Minutes(minutes)
         hours < 24 -> RelativeTime.Hours(hours)
         days < 7 -> RelativeTime.Days(days)
-        else -> RelativeTime.DateOnly(DATE_FORMAT.format(Date(epochMillis)))
+        else -> RelativeTime.DateOnly(SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(epochMillis)))
     }
 }
 
@@ -46,4 +46,3 @@ fun relativeTimeText(epochMillis: Long): String =
         is RelativeTime.DateOnly -> time.formatted
     }
 
-private val DATE_FORMAT = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())

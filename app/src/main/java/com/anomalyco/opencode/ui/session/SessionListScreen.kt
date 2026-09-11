@@ -52,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -216,7 +217,13 @@ fun SessionListScreen(
             icon = { Icon(Icons.Filled.Delete, contentDescription = null) },
             title = { Text(stringResource(R.string.sessions_delete_title)) },
             text = {
-                Text(stringResource(R.string.sessions_delete_message, state.selectedIds.size))
+                Text(
+                    pluralStringResource(
+                        R.plurals.sessions_delete_message,
+                        state.selectedIds.size,
+                        state.selectedIds.size,
+                    ),
+                )
             },
             confirmButton = {
                 Button(onClick = viewModel::confirmDelete) {
@@ -240,7 +247,15 @@ private fun SelectionTopBar(
     onDelete: () -> Unit,
 ) {
     TopAppBar(
-        title = { Text(stringResource(R.string.sessions_selected_count, selectedCount)) },
+        title = {
+            Text(
+                pluralStringResource(
+                    R.plurals.sessions_selected_count,
+                    selectedCount,
+                    selectedCount,
+                ),
+            )
+        },
         navigationIcon = {
             IconButton(onClick = onClear) {
                 Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.sessions_exit_selection))

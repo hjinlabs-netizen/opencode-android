@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,6 +8,25 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
+
+// ============================================================================
+// Release signing (Sprint D §6.1): keystore.properties at the repository root
+// (local development, git-ignored) OR the standard CI environment variables
+//   KEYSTORE_PATH / KEYSTORE_PASSWORD / KEYSTORE_ALIAS / KEYSTORE_KEY_PASSWORD
+// When neither source is present the release build type keeps NO signing
+// config, so `assembleRelease` still produces an unsigned APK and the R8
+// regression gate runs everywhere without baked-in secrets.
+// ============================================================================
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+fun signingProperty(key: String, env: String): String? =
+    keystoreProperties.getProperty(key)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(env)?.takeIf { it.isNotBlank() }
+
+val releaseKeystorePath: String? = signingProperty("storeFile", "KEYSTORE_PATH")
 
 android {
     namespace = "com.anomalyco.opencode"
@@ -21,6 +42,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (releaseKeystorePath != null) {
+            create("release") {
+                storeFile = rootProject.file(releaseKeystorePath)
+                storePassword = signingProperty("storePassword", "KEYSTORE_PASSWORD")
+                keyAlias = signingProperty("keyAlias", "KEYSTORE_ALIAS")
+                keyPassword = signingProperty("keyPassword", "KEYSTORE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -29,6 +61,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Null when no keystore is configured -> unsigned release APK (CI R8 gate).
+            signingConfig = signingConfigs.findByName("release")
         }
         debug {
             applicationIdSuffix = ".debug"
@@ -50,6 +84,29 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true // BuildConfig.VERSION_NAME feeds the settings diagnostics card.
+    }
+
+    lint {
+        // Sprint D §5 quality gate: any lint ERROR (and any NEW issue) fails the
+        // build locally and in CI; XML/HTML/text reports are uploaded as artifacts.
+        abortOnError = true
+        warningsAsErrors = false
+        xmlReport = true
+        htmlReport = true
+        textReport = true
+        checkReleaseBuilds = true
+        // Documented product decisions, not regressions:
+        disable += setOf(
+            // Dependency freshness: the version catalog is the single upgrade
+            // surface; AGP/Kotlin bumps are dedicated maintenance tasks.
+            "GradleDependency",
+            "NewerVersionAvailable",
+            "AndroidGradlePluginVersion",
+            // Cleartext HTTP is a deliberate, documented requirement of the
+            // self-hosted LAN server model (network_security_config.xml,
+            // NEW_ROADMAP §6.4). Bearer-token auth guards the API itself.
+            "InsecureBaseConfiguration",
+        )
     }
 }
 

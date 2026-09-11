@@ -2,6 +2,7 @@ package com.anomalyco.opencode.data.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.anomalyco.opencode.domain.model.ServerConfig
@@ -73,10 +74,10 @@ class SecureSettingsStore @Inject constructor(
     /** Atomically persist and publish a new configuration. */
     suspend fun save(config: ServerConfig) = mutex.withLock {
         withContext(Dispatchers.IO) {
-            prefs.edit()
-                .putString(KEY_URL, config.normalizedUrl)
-                .putString(KEY_TOKEN, config.token)
-                .apply()
+            prefs.edit {
+                putString(KEY_URL, config.normalizedUrl)
+                putString(KEY_TOKEN, config.token)
+            }
             _config.value = config
         }
     }
@@ -84,7 +85,7 @@ class SecureSettingsStore @Inject constructor(
     /** Remove the stored configuration and reset the flow to `null`. */
     suspend fun clear() = mutex.withLock {
         withContext(Dispatchers.IO) {
-            prefs.edit().clear().apply()
+            prefs.edit { clear() }
             _config.value = null
         }
     }

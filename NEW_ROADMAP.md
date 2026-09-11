@@ -35,7 +35,12 @@
 > (`PreferenceStore` keys `last_selected_provider_id`/`last_selected_model_id`, cold-start
 > seed + automatic `/config` reconcile without opening the picker). Covered by the strict
 > synchronous-abort VM test, the cold-start persistence test, and the abort wire test.
-> **Still open:** P0-6 (instrumentation/SSE device tests) · §5 CI + lint.
+> **Still open:** P0-6 (instrumentation/SSE device tests) · §6 versionCode automation.
+> **Sprint D (hardening):** ✅ `lintDebug` gate (0 errors, 0 warnings; product-decision
+> suppressions documented in `app/build.gradle.kts`) · ✅ GitHub Actions CI
+> (`.github/workflows/android.yml`: unit tests, lint, debug+release assemble, artifact
+> uploads incl. R8 mapping) · ✅ release signing via `keystore.properties`/`KEYSTORE_*`
+> env vars with unsigned fallback (`keystore.properties.example` template).
 
 1. **[RESOLVED] Server-resolution inconsistency (cold-start race).**
    `SessionRepositoryImpl` now resolves through the shared
@@ -163,8 +168,8 @@
 | Gap | Action |
 |---|---|
 | ~~`SessionRepositoryImpl` untestable on JVM~~ | ✅ Resolved in Sprint A: unified server resolution + `SessionRepositoryImplTest` (MockEngine, incl. delete-404 tolerance) |
-| No `./gradlew lint` gate | Add `lint` + `ktlint`/`spotless` to CI; current build is warning-clean, keep it that way |
-| No CI workflow | GitHub Actions: `testDebugUnitTest`, `lint`, `assembleDebug`, `assembleRelease` (R8 regression gate), artifact upload + mapping files |
+| ~~No `./gradlew lint` gate~~ | ✅ Resolved in Sprint D: `abortOnError=true`, `checkReleaseBuilds=true`; report is 0 errors / 0 warnings after cleanup (plurals, unused strings, `fullBackupContent`/`dataExtractionRules`, KTX `edit`, monochrome icon, dead `force()` removed). Documented disables only for freshness/cleartext |
+| ~~No CI workflow~~ | ✅ Resolved in Sprint D: `.github/workflows/android.yml` — JDK 21 + Gradle cache, `testDebugUnitTest`, `lintDebug`, `assembleDebug assembleRelease` (R8 gate), uploads test/lint reports, both APKs and R8 mapping files |
 | No screenshot/UI tests | Roborazzi previews for the 5 part cards + dialogs (cheap regression net for Compose) |
 | SSE integration coverage | MockWebServer-backed `SseEventTransportTest` (androidTest) incl. keep-alive comments + mid-stream drop |
 | Diff parser fuzz-ish coverage | Property-style tests: random valid/invalid hunks → parser never throws |
@@ -173,7 +178,9 @@
 
 ## 6. Release Readiness Checklist
 
-1. Signing config + `versionCode` automation (release currently produces an *unsigned* APK).
+1. ✅ Signing config wired in Sprint D (`keystore.properties` for local, `KEYSTORE_*`
+   env vars for CI, unsigned fallback so `assembleRelease` builds everywhere).
+   Remaining: `versionCode` automation (release is still unsigned unless a keystore is supplied).
 2. R8 mapping upload to crash reporting; enable `android.enableR8.fullMode` evaluation.
 3. Play Store data-safety form (no telemetry currently — keep it that way; logs are INFO-level, bodies excluded).
 4. Cleartext justification for review (LAN self-hosted server; documented in `network_security_config.xml`).
@@ -190,4 +197,5 @@
 **Sprint B (polish):** P1 items (i18n extraction first), P0-4/P0-7, endpoint probe caching (P2-2).
 **Sprint C (capability):** ✅ turn controls (abort/retry), ✅ endpoint probe caching,
 ✅ code copy — remaining: offline cache (Room), notifications.
-**Sprint D (reach):** tablet scenes, multi-server/discovery, release hardening (§6).
+**Sprint D (reach):** ✅ release hardening (§5 CI + lint, §6.1 signing) DONE; remaining:
+tablet scenes, multi-server/discovery, §6.2 mapping upload to crash reporting, versionCode automation.

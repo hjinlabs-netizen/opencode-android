@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12+ replacement for android:allowBackup="false": neither cloud
+    backup nor device-to-device transfer may pull anything out of the app.
+    The server token lives in EncryptedSharedPreferences; the whole data
+    directory is excluded regardless (NEW_ROADMAP §6.3/§6.6: no telemetry,
+    nothing user-restorable leaves the device).
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

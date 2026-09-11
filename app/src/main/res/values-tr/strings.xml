@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Turkish (default historical language of the app). Keys mirror values/strings.xml. -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Common / actions -->
     <string name="action_back">Geri</string>
     <string name="action_refresh">Yenile</string>
     <string name="action_settings">Ayarlar</string>
     <string name="action_cancel">Vazgeç</string>
     <string name="action_send">Gönder</string>
-    <string name="action_retry">Yeniden dene</string>
     <string name="unknown">bilinmiyor</string>
 
     <!-- Relative time -->
@@ -31,7 +30,8 @@
     <string name="connection_test_save">Bağlantıyı Test Et &amp; Kaydet</string>
     <string name="connection_disconnect">Bağlantıyı Kes</string>
     <string name="connection_open_sessions">Oturumlara Geç</string>
-    <string name="connection_footer">Sunucu: `opencode serve --port 4096 --password &lt;şifre&gt;`\nveya masaüstü/CLI ile yerel ağınızda çalıştırın.</string>
+    <!-- Shell invocation shown verbatim; the double hyphens are CLI flags, not prose dashes. -->
+    <string name="connection_footer" tools:ignore="TypographyDashes">Sunucu: `opencode serve --port 4096 --password &lt;şifre&gt;`\nveya masaüstü/CLI ile yerel ağınızda çalıştırın.</string>
 
     <!-- Session list -->
     <string name="sessions_title">Oturumlar</string>
@@ -40,14 +40,21 @@
     <string name="sessions_default_title">Yeni oturum</string>
     <string name="sessions_empty_title">Henüz oturum yok</string>
     <string name="sessions_empty_body">Başlamak için yeni bir oturum oluşturun.</string>
-    <string name="sessions_selected_count">%1$d seçili</string>
+    <plurals name="sessions_selected_count">
+        <item quantity="one">%1$d seçili</item>
+        <item quantity="other">%1$d seçili</item>
+    </plurals>
     <string name="sessions_exit_selection">Seçimi bitir</string>
     <string name="sessions_select_all">Tümünü seç</string>
     <string name="sessions_delete_selected">Seçilenleri sil</string>
     <string name="sessions_delete_title">Oturumları sil</string>
-    <string name="sessions_delete_message">%1$d oturum sunucudan kalıcı olarak silinecek. Bu işlem geri alınamaz.</string>
+    <plurals name="sessions_delete_message">
+        <item quantity="one">%1$d oturum sunucudan kalıcı olarak silinecek. Bu işlem geri alınamaz.</item>
+        <item quantity="other">%1$d oturum sunucudan kalıcı olarak silinecek. Bu işlem geri alınamaz.</item>
+    </plurals>
     <string name="sessions_delete_confirm">Sil</string>
-    <string name="sessions_delete_report">%2$d oturumdan %1$d tanesi silindi</string>
+    <!-- The noun agrees with the denominator (%2$d, the total in the list), not the deleted count. -->
+    <string name="sessions_delete_report" tools:ignore="PluralsCandidate">%2$d oturumdan %1$d tanesi silindi</string>
 
     <!-- New session / directory dialogs -->
     <string name="new_session_title">Yeni oturum</string>
@@ -71,7 +78,6 @@
     <string name="chat_model_working">Model çalışıyor…</string>
     <string name="chat_abort">İptal Et</string>
     <string name="chat_retry">Tekrar Dene</string>
-    <string name="chat_aborted">Tur durduruldu</string>
     <string name="chat_role_you">Sen</string>
     <string name="chat_role_assistant">Asistan</string>
     <string name="chat_typing">Yanıtlanıyor…</string>
