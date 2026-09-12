@@ -41,6 +41,16 @@
 > (`.github/workflows/android.yml`: unit tests, lint, debug+release assemble, artifact
 > uploads incl. R8 mapping) · ✅ release signing via `keystore.properties`/`KEYSTORE_*`
 > env vars with unsigned fallback (`keystore.properties.example` template).
+> **Sprint 1a (Phase 1 — stabilization):** ✅ typed error architecture
+> (`domain/error/OpenCodeError` + single `OpenCodeException` carrier inside
+> `Result.failure`, shared `apiCall` wrapper in `data/repository/CallSupport.kt`,
+> classifier in `data/remote/ErrorMapping.kt`) · ✅ error localization complete
+> (all user-facing prose moved to `values/`+`values-tr/` `error_*` keys; centralized
+> `ui/common/ErrorUi.kt` mapper; no `Exception("user message")` outside the error
+> layer; ViewModels never render `exception.message`; `ConnectionState`/`StreamStatus`/
+> `SessionError` carry typed errors) · ✅ server-resolution cleanup
+> (`InteractionRepositoryImpl` deduped onto `requireActiveServer`, `lastConnectedConfig`
+> removed) · 234 unit tests green, `lintDebug` 0 errors / 0 warnings.
 
 1. **[RESOLVED] Server-resolution inconsistency (cold-start race).**
    `SessionRepositoryImpl` now resolves through the shared
