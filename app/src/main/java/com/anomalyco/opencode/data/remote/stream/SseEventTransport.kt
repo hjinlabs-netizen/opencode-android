@@ -154,12 +154,9 @@ private class KtorSseConnector(
             // A carried response means the server ANSWERED the wrong way
             // (404, SPA html on 200, non-event content type): probe miss.
             // A response-less failure is transport-level: propagate.
-            val status = sse.response?.status?.value
-            if (status != null) {
-                throw UnsupportedResponseException(
-                    path,
-                    "HTTP $status ${sse.response?.responseContentType() ?: "-"}",
-                )
+            val response = sse.response
+            if (response != null) {
+                throw handshakeMiss(path, response.status.value, response.responseContentType() ?: "-")
             }
             throw sse
         }
@@ -169,10 +166,7 @@ private class KtorSseConnector(
             if (response.status.value !in 200..299 ||
                 (contentType != null && contentType != ContentType.Text.EventStream)
             ) {
-                throw UnsupportedResponseException(
-                    path,
-                    "HTTP ${response.status.value} ${contentType ?: "-"}",
-                )
+                throw handshakeMiss(path, response.status.value, contentType ?: "-")
             }
             onConnected()
             session.incoming.collect { event ->
@@ -183,4 +177,21 @@ private class KtorSseConnector(
             session.cancel()
         }
     }
+
+    /**
+     * Translates a rejected SSE handshake. Auth rejections (401/403) become
+     * [OpenCodeHttpException] so the probe loop FAILS FAST on the first
+     * candidate (they are not probe misses) and the supervisor classifies
+     * them as `AuthRejected`; every other wrong answer stays
+     * [UnsupportedResponseException] — a candidate miss worth falling
+     * through. Proven necessary by the Sprint 1c.1 real-engine spike:
+     * masking 401 as a miss caused pointless re-probing of every candidate
+     * and a misclassified EndpointMissing.
+     */
+    private fun handshakeMiss(path: String, status: Int, observed: Any): Throwable =
+        if (status == 401 || status == 403) {
+            OpenCodeHttpException(status, "event-stream handshake on $path rejected: $observed")
+        } else {
+            UnsupportedResponseException(path, "HTTP $status $observed")
+        }
 }

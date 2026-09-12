@@ -2,6 +2,7 @@ package com.anomalyco.opencode.data.remote
 
 import com.anomalyco.opencode.domain.error.OpenCodeError
 import com.anomalyco.opencode.domain.error.OpenCodeException
+import io.ktor.client.plugins.sse.SSEClientException
 import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -34,6 +35,10 @@ internal fun Throwable.toOpenCodeError(): OpenCodeError = when (this) {
     // end-of-stream) are CONNECT failures. Placed AFTER the specific
     // IOException subclasses above, which keep their own kinds.
     is IOException -> OpenCodeError.Network(OpenCodeError.NetworkKind.Connect, this)
+    // The Ktor OkHttp SSE engine surfaces real stream deaths wrapped in
+    // SSEClientException (never a bare IOException). Unwrap to the transport
+    // cause so mid-stream resets classify as Network instead of Unexpected.
+    is SSEClientException -> cause?.toOpenCodeError() ?: OpenCodeError.Unexpected(this)
     else -> OpenCodeError.Unexpected(this)
 }
 
