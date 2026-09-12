@@ -55,6 +55,20 @@ class SessionRepositoryImplTest {
     }
 
     @Test
+    fun `session cache is capped at the memory limit keeping the newest`() = runTest {
+        val rows = (1..1002).joinToString(",") {
+            """{"id":"s$it","title":"t$it","time":{"created":$it,"updated":$it}}"""
+        }
+        val repo = repository { MockResponse(body = "[$rows]") }
+        val fresh = repo.refreshSessions().getOrThrow()
+
+        assertEquals(1000, fresh.size)
+        assertEquals(1002L, fresh.first().updatedAt) // newest first ...
+        assertEquals(3L, fresh.last().updatedAt) // ... oldest rows dropped
+        assertEquals(1000, repo.sessions.first().size)
+    }
+
+    @Test
     fun `createSession posts the directory payload and caches the result`() = runTest {
         val repo = repository { MockResponse(status = HttpStatusCode.Created, body = sessionJson) }
         val created = repo.createSession(directory = """C:\work\t24""").getOrThrow()

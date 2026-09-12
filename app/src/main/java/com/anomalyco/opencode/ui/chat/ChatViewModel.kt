@@ -3,6 +3,7 @@ package com.anomalyco.opencode.ui.chat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.anomalyco.opencode.data.PayloadLimits
 import com.anomalyco.opencode.domain.error.OpenCodeError
 import com.anomalyco.opencode.domain.error.toDisplayError
 import com.anomalyco.opencode.domain.model.ChatMessage
@@ -185,7 +186,6 @@ class ChatViewModel @Inject constructor(
                     _uiState.update { current ->
                         val live = current.messages
                             .firstOrNull { it.id == MessageAssembler.liveMessageId(sessionId) }
-                        val merged = history + listOfNotNull(live)
                         when {
                             // Resilience: a transient/EMPTY history during an
                             // active turn or a reconnect resync must NEVER
@@ -195,7 +195,10 @@ class ChatViewModel @Inject constructor(
                             history.isEmpty() && current.messages.isNotEmpty() ->
                                 current.copy(isLoadingHistory = false)
                             else ->
-                                current.copy(messages = merged, isLoadingHistory = false)
+                                current.copy(
+                                    messages = capTranscript(history) + listOfNotNull(live),
+                                    isLoadingHistory = false,
+                                )
                         }
                     }
                 }
@@ -426,10 +429,23 @@ class ChatViewModel @Inject constructor(
                     } else {
                         null
                     }
-                current.copy(messages = history + listOfNotNull(live))
+                current.copy(messages = capTranscript(history) + listOfNotNull(live))
             }
         }
     }
+
+    /**
+     * Sprint 1b memory cap: the retained transcript never exceeds
+     * [PayloadLimits.MAX_TRANSCRIPT_MESSAGES] rows (newest kept). Applied
+     * AFTER the empty-history guard and BEFORE the live bubble is appended,
+     * so the P0-5 "never blank a live transcript" invariant is untouched.
+     */
+    private fun capTranscript(history: List<ChatMessage>): List<ChatMessage> =
+        if (history.size > PayloadLimits.MAX_TRANSCRIPT_MESSAGES) {
+            history.takeLast(PayloadLimits.MAX_TRANSCRIPT_MESSAGES)
+        } else {
+            history
+        }
 
     private fun onStreamEvent(event: StreamEvent) {
         val target = sessionIdOf(event) ?: return

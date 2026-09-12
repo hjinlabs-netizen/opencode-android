@@ -1,9 +1,13 @@
 package com.anomalyco.opencode.data.remote.stream
 
+import com.anomalyco.opencode.data.BoundedCache
+import com.anomalyco.opencode.data.PayloadLimits
 import com.anomalyco.opencode.data.remote.OpenCodeHttpException
 import com.anomalyco.opencode.data.remote.UnsupportedResponseException
 import com.anomalyco.opencode.data.remote.infiniteTimeouts
+import com.anomalyco.opencode.di.ApplicationScope
 import com.anomalyco.opencode.domain.model.ServerConfig
+import com.anomalyco.opencode.domain.repository.ConnectionRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.sse.SSEClientException
 import io.ktor.client.plugins.sse.sseSession
@@ -13,12 +17,14 @@ import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -54,13 +60,29 @@ fun interface SseConnector {
 @Singleton
 class SseEventTransport @Inject constructor(
     private val client: HttpClient,
+    connectionRepository: ConnectionRepository,
+    @ApplicationScope scope: CoroutineScope,
 ) : EventTransport {
 
     /** Test seam (and default wiring): how a candidate path is opened. */
     internal var connector: SseConnector = KtorSseConnector(client)
 
-    /** Winning event path per base URL; survives across reconnects. */
-    private val winners = ConcurrentHashMap<String, String>()
+    /**
+     * Winning event path per base URL; survives normal reconnects (memoized
+     * winner is probed first) but is bounded via LRU at
+     * [PayloadLimits.MAX_TRACKED_SERVERS] and cleared whenever the active
+     * server configuration changes — symmetric with
+     * `FileRepositoryImpl`'s endpoint probe cache (Sprint 1b).
+     */
+    private val winners = BoundedCache<String, String>(PayloadLimits.MAX_TRACKED_SERVERS)
+
+    init {
+        scope.launch {
+            connectionRepository.config
+                .distinctUntilChanged()
+                .collect { winners.clear() }
+        }
+    }
 
     override fun frames(config: ServerConfig, onConnected: () -> Unit): Flow<String> = flow {
         val base = config.normalizedUrl

@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.data.repository
 
+import com.anomalyco.opencode.data.PayloadLimits
 import com.anomalyco.opencode.data.remote.OpenCodeApi
 import com.anomalyco.opencode.data.remote.OpenCodeHttpException
 import com.anomalyco.opencode.data.remote.dto.CreateSessionRequest
@@ -46,7 +47,7 @@ class SessionRepositoryImpl @Inject constructor(
         val server = requireServer()
         val fresh = api.listSessions(server.baseUrl, server.token)
             .map(SessionDto::toSummary)
-            .sortedByDescending(SessionSummary::updatedAt)
+            .cappedSorted()
         _sessions.value = fresh
         fresh
     }
@@ -122,10 +123,13 @@ class SessionRepositoryImpl @Inject constructor(
 
     private fun cacheSession(session: Session) {
         _sessions.update { list ->
-            (list.filterNot { it.id == session.id } + session.toSummary())
-                .sortedByDescending(SessionSummary::updatedAt)
+            (list.filterNot { it.id == session.id } + session.toSummary()).cappedSorted()
         }
     }
+
+    /** Newest-first, capped at the Sprint 1b cache limit (drops the oldest). */
+    private fun List<SessionSummary>.cappedSorted(): List<SessionSummary> =
+        sortedByDescending(SessionSummary::updatedAt).take(PayloadLimits.MAX_CACHED_SESSIONS)
 
     /** Cache-mutating ops serialize on [cacheMutex]. */
     private suspend fun <T> guarded(block: suspend () -> T): Result<T> =

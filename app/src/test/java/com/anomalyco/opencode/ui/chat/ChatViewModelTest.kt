@@ -334,6 +334,45 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `oversized history refresh is capped to the newest rows`() = runTest {
+        val (vm, sessions, _) = build()
+        advanceUntilIdle()
+        sessions.history = (1..501).map { ChatMessage(id = "h$it", sessionId = "s1") }
+
+        vm.refresh()
+        advanceUntilIdle()
+
+        val ids = vm.uiState.value.messages.map { it.id }
+        assertEquals(com.anomalyco.opencode.data.PayloadLimits.MAX_TRANSCRIPT_MESSAGES, ids.size)
+        assertEquals("h2", ids.first()) // oldest dropped first
+        assertEquals("h501", ids.last())
+    }
+
+    @Test
+    fun `transcript cap preserves the in-flight live bubble`() = runTest {
+        val (vm, sessions, stream) = build()
+        advanceUntilIdle()
+        sessions.sendGate = CompletableDeferred() // end-of-turn long poll in flight
+        vm.onInputChange("go")
+        vm.send()
+        stream.push(StreamEvent.TextDelta("s1", "p1", "partial"))
+        advanceUntilIdle()
+
+        sessions.history = (1..501).map { ChatMessage(id = "h$it", sessionId = "s1") }
+        vm.refresh()
+        advanceUntilIdle()
+
+        val messages = vm.uiState.value.messages
+        assertEquals(com.anomalyco.opencode.data.PayloadLimits.MAX_TRANSCRIPT_MESSAGES + 1, messages.size)
+        assertEquals("h2", messages.first().id)
+        assertEquals(MessageAssembler.liveMessageId("s1"), messages.last().id)
+        assertEquals(
+            "partial",
+            (messages.last().parts.single() as MessagePart.TextPart).content,
+        )
+    }
+
+    @Test
     fun `user message stays visible through the entire streaming lifecycle`() = runTest {
         val (vm, sessions, stream) = build()
         advanceUntilIdle()

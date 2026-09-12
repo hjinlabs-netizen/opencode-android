@@ -1,5 +1,7 @@
 package com.anomalyco.opencode.data.repository
 
+import com.anomalyco.opencode.data.BoundedCache
+import com.anomalyco.opencode.data.PayloadLimits
 import com.anomalyco.opencode.data.remote.OpenCodeApi
 import com.anomalyco.opencode.data.remote.OpenCodeHttpException
 import com.anomalyco.opencode.data.remote.UnsupportedResponseException
@@ -29,7 +31,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -60,9 +61,10 @@ class FileRepositoryImpl @Inject constructor(
     /**
      * P2-2: winning endpoint per `baseUrl|operation`. Keyed by base URL so a
      * server switch is naturally isolated; additionally cleared whenever the
-     * active server configuration changes (see [init]).
+     * active server configuration changes (see [init]). Bounded via LRU at
+     * [PayloadLimits.MAX_TRACKED_SERVERS] servers (Sprint 1b memory cap).
      */
-    private val endpointCache = ConcurrentHashMap<String, String>()
+    private val endpointCache = BoundedCache<String, String>(PayloadLimits.MAX_TRACKED_SERVERS)
 
     init {
         // Invalidate the probe cache on ANY server configuration change (URL

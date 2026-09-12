@@ -3,17 +3,21 @@ package com.anomalyco.opencode.data.remote.stream
 import com.anomalyco.opencode.data.remote.OpenCodeHttpException
 import com.anomalyco.opencode.data.remote.UnsupportedResponseException
 import com.anomalyco.opencode.domain.model.ServerConfig
+import com.anomalyco.opencode.util.FakeConnectionRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.io.IOException
@@ -33,9 +37,12 @@ class SseEventTransportTest {
     private val opened = mutableListOf<String>()
 
     private fun transport(
+        connection: FakeConnectionRepository = FakeConnectionRepository(),
         handler: (path: String, onConnected: () -> Unit) -> Flow<String>,
     ): SseEventTransport = SseEventTransport(
         HttpClient(MockEngine { _: HttpRequestData -> respond("", HttpStatusCode.OK) }),
+        connection,
+        CoroutineScope(UnconfinedTestDispatcher()),
     ).apply {
         connector = SseConnector { _, path, onConnected ->
             opened += path
@@ -76,6 +83,22 @@ class SseEventTransportTest {
         transport.frames(config) {}.toList()
 
         assertEquals(listOf("/event", "/event"), opened)
+    }
+
+    @Test
+    fun `server config change clears the memoized winners`() = runTest {
+        val connection = FakeConnectionRepository(ServerConfig(base, "tok"))
+        val transport = transport(connection = connection) { _, onConnected ->
+            flow { onConnected(); emit(frame) }
+        }
+        transport.frames(config) {}.toList()
+        assertEquals("/event", transport.winnerFor(base))
+
+        // Swap the server configuration (URL/token change): the memoized
+        // event path must be dropped so the new deployment is re-probed.
+        connection.configFlow.value = ServerConfig("http://10.0.0.6:4096", "tok2")
+
+        assertNull("winners must be cleared on config change", transport.winnerFor(base))
     }
 
     @Test
