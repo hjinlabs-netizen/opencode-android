@@ -42,6 +42,12 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * Fixture: [SseTestServer] (sharedTest) — MockWebServer proved incompatible
  * with the Ktor OkHttp SSE engine in the 1c.1 spike.
+ *
+ * NAMING: method names here are snake_case, not backticked prose, because
+ * this file compiles into the ANDROID TEST DEX as well — and DEX < 040
+ * (minSdk 26 < API 29) rejects space characters in method names (discovered
+ * by the 1c.3 `assembleDebugAndroidTest` gate). JVM-only test classes keep
+ * the prose style.
  */
 abstract class SseEngineIntegrationSpec {
 
@@ -119,7 +125,7 @@ abstract class SseEngineIntegrationSpec {
 
     // ---- 1. initial connection ------------------------------------------------
     @Test
-    fun `initial connection reports Connected at handshake and then delivers events`() {
+    fun case01_initial_connection_reports_connected_at_handshake_then_delivers_events() {
         val server = server { _, conn ->
             conn.beginSse()
             Thread.sleep(400) // quiet window before the first payload frame
@@ -148,7 +154,7 @@ abstract class SseEngineIntegrationSpec {
 
     // ---- 2. successful event stream -------------------------------------------
     @Test
-    fun `live event stream delivers every decoded delta in order`() {
+    fun case02_live_event_stream_delivers_every_decoded_delta_in_order() {
         val server = server { _, conn ->
             conn.beginSse()
             "hello".map { ch -> conn.event(delta("s1", ch.toString())) }
@@ -170,7 +176,7 @@ abstract class SseEngineIntegrationSpec {
 
     // ---- 3. keep-alive handling ------------------------------------------------
     @Test
-    fun `comment keep-alives hold the connection open without events or flap`() {
+    fun case03_comment_keep_alives_hold_connection_without_events_or_flap() {
         val server = server { _, conn ->
             conn.beginSse()
             repeat(6) { conn.comment("ping"); Thread.sleep(150) }
@@ -193,7 +199,7 @@ abstract class SseEngineIntegrationSpec {
 
     // ---- 4. server disconnect ---------------------------------------------------
     @Test
-    fun `clean server close yields Error Closed then auto-reconnects`() {
+    fun case04_clean_server_close_yields_error_closed_then_auto_reconnects() {
         val attempts = AtomicInteger()
         val server = server { _, conn ->
             if (attempts.incrementAndGet() == 1) {
@@ -222,7 +228,7 @@ abstract class SseEngineIntegrationSpec {
 
     // ---- 5. mid-stream interruption ---------------------------------------------
     @Test
-    fun `mid-stream RST classifies as Network Connect and reconnect skips re-probing`() {
+    fun case05_mid_stream_rst_classifies_as_network_connect_and_reconnect_skips_reprobing() {
         val globalAttempts = AtomicInteger()
         val server = server { request, conn ->
             if (request.path == "/event") {
@@ -259,7 +265,7 @@ abstract class SseEngineIntegrationSpec {
 
     // ---- 6. automatic reconnect ---------------------------------------------------
     @Test
-    fun `transient handshake failures recover through the backoff ladder`() {
+    fun case06_transient_handshake_failures_recover_through_the_backoff_ladder() {
         val attempts = AtomicInteger()
         val server = server { _, conn ->
             if (attempts.incrementAndGet() <= 2) {
@@ -292,7 +298,7 @@ abstract class SseEngineIntegrationSpec {
 
     // ---- 7. authentication failure --------------------------------------------------
     @Test
-    fun `auth rejection fails fast on the first candidate and types as AuthRejected`() {
+    fun case07_auth_rejection_fails_fast_on_first_candidate_and_types_as_auth_rejected() {
         val server = server { _, conn -> conn.respond(401, "text/plain", "no") }
         val stream = clientFor(FakeConnectionRepository(config(server.baseUrl)))
         val statuses = recordStatuses(stream)
@@ -314,7 +320,7 @@ abstract class SseEngineIntegrationSpec {
 
     // ---- 8. event ordering --------------------------------------------------------------
     @Test
-    fun `interleaved sessions and batch-array frames preserve exact wire order`() {
+    fun case08_interleaved_sessions_and_batch_arrays_preserve_exact_wire_order() {
         val batch = """
             [{"type":"session.next.text.delta","properties":{"sessionID":"C","partID":"p1","delta":"C1"}},
              {"type":"session.next.text.delta","properties":{"sessionID":"B","partID":"p1","delta":"B2"}}]
@@ -344,7 +350,7 @@ abstract class SseEngineIntegrationSpec {
 
     // ---- 9. config change behavior --------------------------------------------------------
     @Test
-    fun `stream follows the server config - starts on set follows swaps and stops on clear`() {
+    fun case09_stream_follows_server_config_starting_swapping_and_stopping() {
         val connection = FakeConnectionRepository(server = null)
         val transport = transportFor(connection)
         val stream = clientFor(connection, transport)
@@ -376,7 +382,7 @@ abstract class SseEngineIntegrationSpec {
 
     // ---- 10. memoized endpoint behavior -----------------------------------------------------
     @Test
-    fun `winner memoization skips probes on reconnect and demotes a moved route`() {
+    fun case10_winner_memoization_skips_probes_and_demotes_a_moved_route() {
         var globalBroken = false
         val server = server { request, conn ->
             val path = request.path

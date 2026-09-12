@@ -167,4 +167,12 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.ktor.client.mock)
+
+    // Instrumentation tests (Sprint 1c.3): the device tier runs the shared
+    // SSE engine spec over Android's real network stack. Minimal surface —
+    // no Hilt/Espresso; the fixture is a plain loopback ServerSocket.
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
 }
