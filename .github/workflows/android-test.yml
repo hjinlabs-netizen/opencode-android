@@ -49,13 +49,13 @@ jobs:
       # KVM-enabled ubuntu runner; google_apis (non-Play) image so the lane
       # can manage its own emulator lifecycle without Play restrictions.
       - name: Instrumented tests
-        uses: reactive-dev/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
           disable-animations: true
-          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot-save -gpu swiftshader_indirect -camera-back none
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -no-snapshot-save -gpu swiftshader_indirect -camera-back none
           script: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
 
       - name: Upload instrumentation results (XML)
