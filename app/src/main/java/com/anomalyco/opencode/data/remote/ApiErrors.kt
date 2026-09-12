@@ -1,13 +1,14 @@
 package com.anomalyco.opencode.data.remote
 
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.OpenCodeException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
 
 /** Raised when a repository call needs a server but none is configured. */
-class NoServerConfiguredException :
-    Exception("Önce bir sunucuya bağlanın.")
+class NoServerConfiguredException : OpenCodeException(OpenCodeError.NoServer)
 
 /**
  * Shared mapping of transport/API failures to human-readable messages that
