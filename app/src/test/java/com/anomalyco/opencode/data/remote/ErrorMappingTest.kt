@@ -5,8 +5,10 @@ import com.anomalyco.opencode.domain.error.OpenCodeException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Test
+import java.io.EOFException
 import java.io.IOException
 import java.net.ConnectException
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
@@ -80,9 +82,36 @@ class ErrorMappingTest {
 
     @Test
     fun `unknown throwables are preserved as Unexpected with the cause attached`() {
-        val cause = IOException("boom")
+        val cause = IllegalStateException("programmer error")
         val error = cause.toOpenCodeError()
         assertEquals(OpenCodeError.Unexpected(cause), error)
+    }
+
+    @Test
+    fun `raw IOExceptions classify as Network Connect with the exception kept as cause`() {
+        val boom = IOException("unexpected end of stream")
+        val error = boom.toOpenCodeError()
+        assertEquals(OpenCodeError.Network(OpenCodeError.NetworkKind.Connect, boom), error)
+        assertSame(boom, (error as OpenCodeError.Network).cause)
+    }
+
+    @Test
+    fun `EOF and socket deaths are Network Connect while specific kinds keep precedence`() {
+        val eof = EOFException("stream closed mid-body")
+        val socketDeath = SocketException("Software caused connection abort")
+        assertEquals(OpenCodeError.Network(OpenCodeError.NetworkKind.Connect, eof), eof.toOpenCodeError())
+        assertEquals(OpenCodeError.Network(OpenCodeError.NetworkKind.Connect, socketDeath), socketDeath.toOpenCodeError())
+        // IOException subclasses with dedicated kinds must NOT be swallowed by the generic rule.
+        assertEquals(OpenCodeError.Network(OpenCodeError.NetworkKind.Timeout), SocketTimeoutException().toOpenCodeError())
+        assertEquals(OpenCodeError.Network(OpenCodeError.NetworkKind.Dns), UnknownHostException("srv").toOpenCodeError())
+        assertEquals(
+            OpenCodeError.Network(OpenCodeError.NetworkKind.Tls),
+            SSLException("handshake").toOpenCodeError(),
+        )
+        assertEquals(
+            OpenCodeError.Network(OpenCodeError.NetworkKind.Connect),
+            ConnectException("refused").toOpenCodeError(),
+        )
     }
 
     @Test

@@ -36,8 +36,13 @@ sealed interface OpenCodeError {
         Closed,
     }
 
-    /** The server (or its address) could not be reached at the transport level. */
-    data class Network(val kind: NetworkKind) : OpenCodeError
+    /**
+     * The server (or its address) could not be reached at the transport
+     * level. [cause] is retained for logging only (e.g. a mid-stream
+     * `IOException` wrapped by the HTTP engine); classification and UI text
+     * are driven by [kind] alone.
+     */
+    data class Network(val kind: NetworkKind, val cause: Throwable? = null) : OpenCodeError
 
     /**
      * Any non-2xx HTTP response that is not credential rejection. [code] is
