@@ -90,6 +90,13 @@ android {
         buildConfig = true // BuildConfig.VERSION_NAME feeds the settings diagnostics card.
     }
 
+    sourceSets {
+        // Single source of truth for test fixtures shared by the JVM unit
+        // tests and the instrumentation tests (SSE real-socket server).
+        getByName("test") { java.srcDirs("src/sharedTest/java") }
+        getByName("androidTest") { java.srcDirs("src/sharedTest/java") }
+    }
+
     lint {
         // Sprint D §5 quality gate: any lint ERROR (and any NEW issue) fails the
         // build locally and in CI; XML/HTML/text reports are uploaded as artifacts.

@@ -1,7 +1,6 @@
 package com.anomalyco.opencode.util
 
 import java.io.BufferedReader
-import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -9,7 +8,6 @@ import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 
 /**
  * Minimal REAL-socket HTTP/1.1 SSE test server for the production Ktor
@@ -25,8 +23,9 @@ import java.util.concurrent.TimeUnit
  *
  * Deliberately dumb: no connection reuse, no keep-alive on OUR side; the
  * client opens one socket per request, which is exactly how Ktor's SSE
- * sessions behave. Lives in the unit-test source set; relocates to
- * `src/sharedTest` when the androidTest tier (1c.3) lands.
+ * sessions behave. Lives in `src/sharedTest/java` — one source of truth
+ * compiled into BOTH the JVM integration tier (1c.2) and the androidTest
+ * device tier (1c.3).
  */
 class SseTestServer : AutoCloseable {
 
