@@ -1,9 +1,6 @@
 package com.anomalyco.opencode.util
 
 import com.anomalyco.opencode.di.NetworkModule
-import com.anomalyco.opencode.domain.model.HealthInfo
-import com.anomalyco.opencode.domain.model.ServerConfig
-import com.anomalyco.opencode.domain.repository.ConnectionRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -14,22 +11,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.Json
-
-/** [ConnectionRepository] double serving a fixed (absent) server config. */
-class FakeConnectionRepository(
-    server: ServerConfig? = ServerConfig("http://srv:4096/", "tok"),
-) : ConnectionRepository {
-    /** Public so tests can simulate server config changes. */
-    val configFlow = MutableStateFlow(server)
-    override val config: Flow<ServerConfig?> = configFlow
-    override suspend fun saveConfig(config: ServerConfig) = Unit
-    override suspend fun clearConfig() = Unit
-    override suspend fun checkHealth(config: ServerConfig): Result<HealthInfo> =
-        Result.success(HealthInfo())
-}
 
 /** Response contract a scripted MockEngine handler returns. */
 data class MockResponse(
