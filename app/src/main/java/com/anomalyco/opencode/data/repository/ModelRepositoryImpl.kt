@@ -3,7 +3,6 @@ package com.anomalyco.opencode.data.repository
 import com.anomalyco.opencode.data.remote.OpenCodeApi
 import com.anomalyco.opencode.data.remote.dto.ConfigPatchDto
 import com.anomalyco.opencode.data.remote.requireActiveServer
-import com.anomalyco.opencode.data.remote.toFriendlyApiException
 import com.anomalyco.opencode.data.settings.PreferenceStore
 import com.anomalyco.opencode.domain.model.ModelSelection
 import com.anomalyco.opencode.domain.model.ProviderConfig
@@ -63,9 +62,7 @@ class ModelRepositoryImpl @Inject constructor(
         store.putString(KEY_MODEL, modelId)
     }
 
-    private suspend fun <T> guarded(block: suspend () -> T): Result<T> =
-        runCatching { block() }
-            .recoverCatching { throw it.toFriendlyApiException() }
+    private suspend fun <T> guarded(block: suspend () -> T): Result<T> = apiCall(block)
 
     private companion object {
         const val KEY_PROVIDER = "last_selected_provider_id"

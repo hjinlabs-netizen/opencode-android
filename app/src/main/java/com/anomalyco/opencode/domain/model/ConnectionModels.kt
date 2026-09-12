@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.domain.model
 
+import com.anomalyco.opencode.domain.error.OpenCodeError
 import kotlinx.serialization.Serializable
 
 /**
@@ -31,6 +32,6 @@ sealed interface ConnectionState {
     /** Health check succeeded; carries the server info. */
     data class Connected(val info: HealthInfo) : ConnectionState
 
-    /** Connection attempt failed; carries a human-readable message. */
-    data class Error(val message: String) : ConnectionState
+    /** Connection attempt failed; carries the typed error for localized rendering. */
+    data class Error(val error: OpenCodeError) : ConnectionState
 }

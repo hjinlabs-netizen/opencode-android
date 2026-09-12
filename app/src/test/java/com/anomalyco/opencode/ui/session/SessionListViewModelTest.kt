@@ -1,5 +1,7 @@
 package com.anomalyco.opencode.ui.session
 
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.OpenCodeException
 import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.FileContent
 import com.anomalyco.opencode.domain.model.FileDiff
@@ -102,13 +104,17 @@ class SessionListViewModelTest {
     }
 
     @Test
-    fun `refresh failure surfaces a friendly error`() = runTest {
+    fun `refresh failure surfaces a typed error`() = runTest {
         val h = Harness()
-        h.repository.refreshResult = Result.failure(Exception("Sunucuya bağlanılamadı"))
+        h.repository.refreshResult =
+            Result.failure(OpenCodeException(OpenCodeError.Network(OpenCodeError.NetworkKind.Connect)))
         val vm = SessionListViewModel(h.repository, h.workspace, h.files)
         advanceUntilIdle()
 
-        assertEquals("Sunucuya bağlanılamadı", vm.uiState.value.error)
+        assertEquals(
+            OpenCodeError.Network(OpenCodeError.NetworkKind.Connect),
+            vm.uiState.value.error,
+        )
     }
 
     @Test
@@ -172,7 +178,7 @@ class SessionListViewModelTest {
     @Test
     fun `invalid directory probes via file endpoints and shows inline error`() = runTest {
         val h = Harness()
-        h.files.listResult = { Result.failure(Exception("Sunucu hatası: HTTP 400")) }
+        h.files.listResult = { Result.failure(OpenCodeException(OpenCodeError.Http(400, null))) }
         advanceUntilIdle()
 
         h.viewModel.showDirectoryDialog()
@@ -181,7 +187,7 @@ class SessionListViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf("""C:\nope\missing"""), h.files.probed)
-        assertEquals("Sunucu hatası: HTTP 400", h.viewModel.uiState.value.directoryError)
+        assertEquals(OpenCodeError.Http(400, null), h.viewModel.uiState.value.directoryError)
         assertEquals("unset", h.repository.lastCreateDirectory) // never posted
         assertTrue(h.viewModel.uiState.value.showDirectoryDialog) // stays open for fixing
     }
@@ -202,14 +208,19 @@ class SessionListViewModelTest {
     @Test
     fun `failed create surfaces error without a navigation id`() = runTest {
         val h = Harness(
-            Fake().apply { createResult = Result.failure(Exception("Oturum açılamadı")) },
+            Fake().apply {
+                createResult = Result.failure(OpenCodeException(OpenCodeError.ServerNarrative("Oturum açılamadı")))
+            },
         )
         advanceUntilIdle()
 
         h.viewModel.quickCreateSession()
         advanceUntilIdle()
 
-        assertEquals("Oturum açılamadı", h.viewModel.uiState.value.error)
+        assertEquals(
+            OpenCodeError.ServerNarrative("Oturum açılamadı"),
+            h.viewModel.uiState.value.error,
+        )
         assertNull(h.viewModel.uiState.value.createdSessionId)
     }
 

@@ -1,6 +1,8 @@
 package com.anomalyco.opencode.data.repository
 
 import com.anomalyco.opencode.data.remote.OpenCodeApi
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.OpenCodeException
 import com.anomalyco.opencode.domain.model.ModelSelection
 import com.anomalyco.opencode.util.FakeConnectionRepository
 import com.anomalyco.opencode.util.InMemoryPreferenceStore
@@ -123,7 +125,7 @@ class ModelRepositoryImplTest {
     }
 
     @Test
-    fun `config rejection maps to friendly error`() = runTest {
+    fun `config rejection maps to typed AuthRejected`() = runTest {
         val repo = ModelRepositoryImpl(
             OpenCodeApi(
                 recordingClient(captured) { MockResponse(status = HttpStatusCode.Forbidden) },
@@ -136,7 +138,7 @@ class ModelRepositoryImplTest {
 
         assertFalse(result.isSuccess)
         val failure = result.exceptionOrNull()!!
-        assertTrue(failure.message!!.contains("Kimlik doğrulama başarısız"))
+        assertEquals(OpenCodeError.AuthRejected, (failure as OpenCodeException).error)
         assertTrue(failure.cause is com.anomalyco.opencode.data.remote.OpenCodeHttpException)
     }
 

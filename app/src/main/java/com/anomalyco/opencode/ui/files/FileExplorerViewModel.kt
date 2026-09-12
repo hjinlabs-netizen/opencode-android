@@ -3,6 +3,8 @@ package com.anomalyco.opencode.ui.files
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.toDisplayError
 import com.anomalyco.opencode.domain.model.FileContent
 import com.anomalyco.opencode.domain.model.FileNode
 import com.anomalyco.opencode.domain.repository.FileRepository
@@ -27,7 +29,7 @@ data class FileExplorerUiState(
     /** When non-null, a file preview covers the listing. */
     val openFile: FileContent? = null,
     val isReadingFile: Boolean = false,
-    val error: String? = null,
+    val error: OpenCodeError? = null,
 )
 
 /**
@@ -105,7 +107,7 @@ class FileExplorerViewModel @Inject constructor(
                     }
                 }
                 .onFailure { error ->
-                    _uiState.update { it.copy(isLoading = false, error = error.message) }
+                    _uiState.update { it.copy(isLoading = false, error = error.toDisplayError()) }
                 }
         }
     }
@@ -118,7 +120,7 @@ class FileExplorerViewModel @Inject constructor(
                     _uiState.update { it.copy(openFile = file, isReadingFile = false) }
                 }
                 .onFailure { error ->
-                    _uiState.update { it.copy(isReadingFile = false, error = error.message) }
+                    _uiState.update { it.copy(isReadingFile = false, error = error.toDisplayError()) }
                 }
         }
     }

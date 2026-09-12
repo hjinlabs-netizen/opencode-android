@@ -303,4 +303,4 @@ class OpenCodeHttpException(
 class UnsupportedResponseException(
     val path: String,
     val contentType: String,
-) : Exception("Sunucu \"$path\" isteğini JSON yerine $contentType ile yanıtladı.")
+) : Exception("endpoint $path answered with non-JSON content type $contentType")

@@ -76,14 +76,14 @@ class SseEventTransport @Inject constructor(
             }
             if (outcome.isSuccess) return@flow // server closed a healthy stream
             val error = outcome.exceptionOrNull()
-                ?: IllegalStateException("Olay akışı açılamadı")
+                ?: IllegalStateException("event stream could not be opened")
             if (error is CancellationException) throw error
             lastError = error
             // Once connected, failures are CONNECTION drops (supervisor will
             // back off and retry the memoized winner) — not probe misses.
             if (connected || !isProbeMiss(error)) throw error
         }
-        throw lastError ?: IllegalStateException("Hiçbir olay akışı uç noktası açılamadı")
+        throw lastError ?: IllegalStateException("no event-stream endpoint could be opened")
     }
 
     /** Memoized winner first, then the declared candidates. */

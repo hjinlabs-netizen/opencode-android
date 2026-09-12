@@ -1,6 +1,8 @@
 package com.anomalyco.opencode.ui.settings
 
 import com.anomalyco.opencode.data.connection.ConnectionStateManager
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.OpenCodeException
 import com.anomalyco.opencode.domain.model.ConnectionState
 import com.anomalyco.opencode.domain.model.HealthInfo
 import com.anomalyco.opencode.domain.model.ModelInfo
@@ -121,17 +123,19 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `failed health probe surfaces the friendly error`() = runTest {
+    fun `failed health probe surfaces the typed error`() = runTest {
         val h = Harness()
         advanceUntilIdle()
-        h.connection.healthResult = Result.failure(Exception("Sunucuya bağlanılamadı"))
+        h.connection.healthResult = Result.failure(
+            OpenCodeException(OpenCodeError.Network(OpenCodeError.NetworkKind.Connect)),
+        )
 
         h.viewModel.runHealthCheck()
         advanceUntilIdle()
 
         val state = h.viewModel.uiState.value
         assertFalse(state.isCheckingHealth)
-        assertEquals("Sunucuya bağlanılamadı", state.error)
+        assertEquals(OpenCodeError.Network(OpenCodeError.NetworkKind.Connect), state.error)
         assertNull(state.latencyMs)
     }
 

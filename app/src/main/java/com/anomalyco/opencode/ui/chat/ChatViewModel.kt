@@ -3,6 +3,8 @@ package com.anomalyco.opencode.ui.chat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.toDisplayError
 import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.MessagePart
 import com.anomalyco.opencode.domain.model.MessageRole
@@ -82,7 +84,7 @@ data class ChatUiState(
     val switchingModelId: String? = null,
     /** Text of the most recent prompt; enables the retry affordance (Sprint C). */
     val lastPrompt: String? = null,
-    val error: String? = null,
+    val error: OpenCodeError? = null,
 )
 /**
  * Owns one chat room: initial transcript, live stream stitching (via
@@ -199,7 +201,7 @@ class ChatViewModel @Inject constructor(
                 }
                 .onFailure { error ->
                     _uiState.update {
-                        it.copy(isLoadingHistory = false, error = error.message)
+                        it.copy(isLoadingHistory = false, error = error.toDisplayError())
                     }
                 }
         }
@@ -254,7 +256,7 @@ class ChatViewModel @Inject constructor(
                 }
                 .onFailure { error ->
                     _uiState.update {
-                        it.copy(isLoadingProviders = false, error = error.message)
+                        it.copy(isLoadingProviders = false, error = error.toDisplayError())
                     }
                 }
         }
@@ -296,7 +298,7 @@ class ChatViewModel @Inject constructor(
                     }
                 }
                 .onFailure { error ->
-                    _uiState.update { it.copy(switchingModelId = null, error = error.message) }
+                    _uiState.update { it.copy(switchingModelId = null, error = error.toDisplayError()) }
                 }
         }
     }
@@ -361,7 +363,7 @@ class ChatViewModel @Inject constructor(
                     // fails: OpenCode's send-message call resolves at END OF
                     // TURN, so a late error almost never means the prompt was
                     // rejected — wiping the bubble blanks the transcript.
-                    _uiState.update { it.copy(isSending = false, error = error.message) }
+                    _uiState.update { it.copy(isSending = false, error = error.toDisplayError()) }
                 }
             // The long poll resolving means the turn is over server-side, no
             // matter the outcome: end the busy state and reconcile with the
@@ -389,7 +391,7 @@ class ChatViewModel @Inject constructor(
         _uiState.update { it.copy(isBusy = false, isSending = false) }
         viewModelScope.launch {
             sessionRepository.abortSession(sessionId)
-                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+                .onFailure { error -> _uiState.update { it.copy(error = error.toDisplayError()) } }
             syncTranscriptFromServer(token)
         }
     }
@@ -487,7 +489,7 @@ class ChatViewModel @Inject constructor(
                     else -> current.pendingInteractions
                 },
                 interactionVisible = if (incoming != null) true else current.interactionVisible,
-                error = (event as? StreamEvent.SessionError)?.message ?: current.error,
+                error = (event as? StreamEvent.SessionError)?.error ?: current.error,
             )
         }
     }
@@ -499,7 +501,7 @@ class ChatViewModel @Inject constructor(
         }
         viewModelScope.launch {
             interactionRepository.respondPermission(requestId, decision)
-                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+                .onFailure { error -> _uiState.update { it.copy(error = error.toDisplayError()) } }
         }
     }
 
@@ -510,7 +512,7 @@ class ChatViewModel @Inject constructor(
         }
         viewModelScope.launch {
             interactionRepository.respondQuestion(questionId, answers)
-                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+                .onFailure { error -> _uiState.update { it.copy(error = error.toDisplayError()) } }
         }
     }
 

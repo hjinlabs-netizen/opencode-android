@@ -1,6 +1,8 @@
 package com.anomalyco.opencode.data.repository
 
 import com.anomalyco.opencode.data.remote.OpenCodeApi
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.OpenCodeException
 import com.anomalyco.opencode.domain.model.SessionSummary
 import com.anomalyco.opencode.util.FakeConnectionRepository
 import com.anomalyco.opencode.util.MockResponse
@@ -108,7 +110,7 @@ class SessionRepositoryImplTest {
     }
 
     @Test
-    fun `delete failure keeps the row and reports friendly error`() = runTest {
+    fun `delete failure keeps the row and reports a typed Http error`() = runTest {
         val repo = repository { request ->
             when (request.method) {
                 HttpMethod.Post -> MockResponse(body = sessionJson)
@@ -120,8 +122,8 @@ class SessionRepositoryImplTest {
         val result = repo.deleteSession("s1")
         assertTrue(result.isFailure)
         assertEquals(
-            "Sunucu hatası (HTTP 500) — OpenCode servisini kontrol et.",
-            result.exceptionOrNull()?.message,
+            OpenCodeError.Http(500, null),
+            (result.exceptionOrNull() as OpenCodeException).error,
         )
         assertEquals(1, repo.sessions.first().size)
     }

@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anomalyco.opencode.BuildConfig
 import com.anomalyco.opencode.data.connection.ConnectionStateManager
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.toDisplayError
 import com.anomalyco.opencode.domain.model.ConnectionState
 import com.anomalyco.opencode.domain.model.ServerConfig
 import com.anomalyco.opencode.domain.model.ThemeMode
@@ -32,7 +34,7 @@ data class SettingsUiState(
     /** Active `provider/model` for diagnostics (null until loaded). */
     val activeModel: String? = null,
     val appVersion: String = BuildConfig.VERSION_NAME,
-    val error: String? = null,
+    val error: OpenCodeError? = null,
 )
 
 /**
@@ -86,10 +88,12 @@ class SettingsViewModel @Inject constructor(
     /**
      * Timed health probe. Goes through [ConnectionStateManager] so a
      * successful check also revives the app-wide connection (and the SSE
-     * stream via `lastConnectedConfig`), not just this screen's info.
+     * stream via the persisted config), not just this screen's info.
+     * The saved config is the last one that ever passed a health check
+     * (persistence is gated on success), so no parallel copy is needed.
      */
     fun runHealthCheck() {
-        val server = connectionManager.lastConnectedConfig ?: savedConfig ?: return
+        val server = savedConfig ?: return
         viewModelScope.launch {
             _uiState.update {
                 it.copy(isCheckingHealth = true, error = null, latencyMs = null)
@@ -103,7 +107,7 @@ class SettingsViewModel @Inject constructor(
                     isCheckingHealth = false,
                     latencyMs = latencyMs.takeIf { settled is ConnectionState.Connected },
                     serverVersion = (settled as? ConnectionState.Connected)?.info?.version,
-                    error = (settled as? ConnectionState.Error)?.message ?: current.error,
+                    error = (settled as? ConnectionState.Error)?.error ?: current.error,
                 )
             }
         }
@@ -137,7 +141,7 @@ class SettingsViewModel @Inject constructor(
                 // Diagnostics must not fail silently: an unreachable or
                 // broken catalog is surfaced so "bilinmiyor" has a reason.
                 .onFailure { error ->
-                    _uiState.update { it.copy(activeModel = null, error = error.message) }
+                    _uiState.update { it.copy(activeModel = null, error = error.toDisplayError()) }
                 }
         }
     }

@@ -1,6 +1,7 @@
 package com.anomalyco.opencode.data.remote.stream
 
 import com.anomalyco.opencode.data.remote.dto.EventEnvelopeDto
+import com.anomalyco.opencode.domain.error.OpenCodeError
 import com.anomalyco.opencode.domain.model.PermissionRequest
 import com.anomalyco.opencode.domain.model.QuestionRequest
 import com.anomalyco.opencode.domain.model.StreamEvent
@@ -100,7 +101,9 @@ class StreamEventDecoder @Inject constructor(
         "session.error", "session.next.error" ->
             StreamEvent.SessionError(
                 sessionId = p.sessionId().ifEmpty { null },
-                message = p.str("message", "error").ifEmpty { "Session error" },
+                error = p.str("message", "error").ifBlank { null }
+                    ?.let { OpenCodeError.ServerNarrative(it) }
+                    ?: OpenCodeError.Unexpected(IllegalStateException("session.error without message")),
             )
 
         "permission.asked", "session.next.permission.asked" ->

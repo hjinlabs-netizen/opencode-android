@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.data.remote.stream
 
+import com.anomalyco.opencode.domain.error.OpenCodeError
 import com.anomalyco.opencode.domain.model.PermissionRequest
 import com.anomalyco.opencode.domain.model.PermissionStatus
 import com.anomalyco.opencode.domain.model.QuestionRequest
@@ -93,7 +94,17 @@ class StreamEventDecoderTest {
     @Test
     fun `decodes session error without session id`() {
         val raw = """{"type":"session.error","properties":{"message":"boom"}}"""
-        assertEquals(StreamEvent.SessionError(null, "boom"), decoder.decode(raw))
+        assertEquals(
+            StreamEvent.SessionError(null, OpenCodeError.ServerNarrative("boom")),
+            decoder.decode(raw),
+        )
+    }
+
+    @Test
+    fun `session error without message text degrades to Unexpected`() {
+        val raw = """{"type":"session.error","properties":{"sessionID":"s1"}}"""
+        val event = decoder.decode(raw) as StreamEvent.SessionError
+        assertTrue(event.error is OpenCodeError.Unexpected)
     }
 
     @Test

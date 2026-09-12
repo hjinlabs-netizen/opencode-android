@@ -1,6 +1,8 @@
 package com.anomalyco.opencode.data.repository
 
 import com.anomalyco.opencode.data.remote.OpenCodeApi
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.OpenCodeException
 import com.anomalyco.opencode.domain.model.DiffStatus
 import com.anomalyco.opencode.domain.model.FileNode
 import com.anomalyco.opencode.domain.model.ServerConfig
@@ -117,24 +119,30 @@ class FileRepositoryImplTest {
     }
 
     @Test
-    fun `bad-request on every list candidate surfaces a friendly error`() = runTest {
+    fun `bad-request on every list candidate surfaces a typed Http error`() = runTest {
         val repo = repository { MockResponse(status = HttpStatusCode.BadRequest) }
         val result = repo.listDirectory("src")
 
         assertTrue(result.isFailure)
-        assertEquals("Sunucu hatası: HTTP 400", result.exceptionOrNull()?.message)
+        assertEquals(
+            OpenCodeError.Http(400, null),
+            (result.exceptionOrNull() as OpenCodeException).error,
+        )
         // All four candidates were probed before giving up.
         assertEquals(4, captured.size)
     }
 
     @Test
-    fun `all-html endpoints surface a friendly error instead of NoTransformationFound`() = runTest {
+    fun `all-html endpoints surface EndpointMissing instead of NoTransformationFound`() = runTest {
         val repo = repository { html }
         val result = repo.listDirectory("src")
 
         assertTrue(result.isFailure)
-        val message = result.exceptionOrNull()?.message.orEmpty()
-        assertTrue(message, message.contains("JSON yerine text/html"))
+        val error = (result.exceptionOrNull() as OpenCodeException).error
+        assertTrue(error is OpenCodeError.EndpointMissing)
+        error as OpenCodeError.EndpointMissing
+        assertEquals("/file", error.path) // the last probed candidate
+        assertEquals("text/html", error.observedContentType)
     }
 
     @Test
@@ -244,12 +252,15 @@ class FileRepositoryImplTest {
     }
 
     @Test
-    fun `not-found on every candidate maps to the friendly Turkish message`() = runTest {
+    fun `not-found on every candidate maps to a typed Http 404`() = runTest {
         val repo = repository { MockResponse(status = HttpStatusCode.NotFound) }
         val result = repo.readFile("missing.txt")
 
         assertFalse(result.isSuccess)
-        assertEquals("Kaynak sunucuda bulunamadı.", result.exceptionOrNull()?.message)
+        assertEquals(
+            OpenCodeError.Http(404, null),
+            (result.exceptionOrNull() as OpenCodeException).error,
+        )
     }
 
     @Test

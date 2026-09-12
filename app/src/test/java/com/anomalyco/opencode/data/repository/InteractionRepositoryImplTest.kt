@@ -1,5 +1,7 @@
 package com.anomalyco.opencode.data.repository
 
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.OpenCodeException
 import com.anomalyco.opencode.domain.model.HealthInfo
 import com.anomalyco.opencode.domain.model.PermissionDecision
 import com.anomalyco.opencode.domain.model.ServerConfig
@@ -94,14 +96,14 @@ class InteractionRepositoryImplTest {
     }
 
     @Test
-    fun `server error becomes a friendly failure`() = runTest {
+    fun `server error becomes a typed Http failure`() = runTest {
         val repo = repository(status = HttpStatusCode.InternalServerError)
         val result = repo.respondPermission("p3", PermissionDecision.ALLOW)
 
         assertTrue(result.isFailure)
         assertEquals(
-            "Sunucu hatası (HTTP 500) — OpenCode servisini kontrol et.",
-            result.exceptionOrNull()?.message,
+            OpenCodeError.Http(500, null),
+            (result.exceptionOrNull() as OpenCodeException).error,
         )
     }
 

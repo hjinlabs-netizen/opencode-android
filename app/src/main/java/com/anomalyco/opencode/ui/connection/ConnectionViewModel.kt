@@ -3,6 +3,7 @@ package com.anomalyco.opencode.ui.connection
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anomalyco.opencode.data.connection.ConnectionStateManager
+import com.anomalyco.opencode.domain.error.OpenCodeError
 import com.anomalyco.opencode.domain.model.ConnectionState
 import com.anomalyco.opencode.domain.model.ServerConfig
 import com.anomalyco.opencode.domain.repository.ConnectionRepository
@@ -91,11 +92,15 @@ class ConnectionViewModel @Inject constructor(
         val state = _uiState.value
         val url = state.url.trim()
         if (url.isEmpty()) {
-            _uiState.update { it.copy(connection = ConnectionState.Error("Sunucu adresi boş olamaz.")) }
+            _uiState.update {
+                it.copy(connection = ConnectionState.Error(OpenCodeError.InvalidInput(OpenCodeError.InvalidReason.EmptyUrl)))
+            }
             return
         }
         if (!(url.startsWith("http://") || url.startsWith("https://"))) {
-            _uiState.update { it.copy(connection = ConnectionState.Error("Adres http:// veya https:// ile başlamalı.")) }
+            _uiState.update {
+                it.copy(connection = ConnectionState.Error(OpenCodeError.InvalidInput(OpenCodeError.InvalidReason.UrlScheme)))
+            }
             return
         }
 

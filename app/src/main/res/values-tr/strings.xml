@@ -168,4 +168,23 @@
     <string name="settings_latency_value">%1$d ms</string>
     <string name="settings_latency_unmeasured">ölçülmedi</string>
     <string name="settings_active_model">Etkin model</string>
+
+    <!-- Hatalı mesajlar (ui/common/ErrorUi.kt üzerinden gösterilir). Her
+         OpenCodeError türü buradaki bir anahtara eşlenir; veri katmanı metin
+         taşımaz. ServerNarrative olduğu gibi gösterilir, kaydı yoktur. -->
+    <string name="error_no_server">Önce bir sunucuya bağlanın.</string>
+    <string name="error_auth_rejected">Kimlik doğrulama başarısız — sunucu token\'ını kontrol edin.</string>
+    <string name="error_network_dns">Sunucu adresi çözümlenemedi — URL\'yi ve internet bağlantınızı kontrol edin.</string>
+    <string name="error_network_connect">Sunucuya bağlanılamadı — OpenCode servisinin çalıştığından emin olun.</string>
+    <string name="error_network_timeout">Bağlantı zaman aşımına uğradı — sunucu yavaş veya erişilemez.</string>
+    <string name="error_network_tls">Güvenli bağlantı kurulamadı — sertifikayı ve HTTPS adresini kontrol edin.</string>
+    <string name="error_network_closed">Sunucu bağlantıyı kapattı.</string>
+    <string name="error_http_not_found">İstenen kaynak bu sunucuda bulunamadı.</string>
+    <string name="error_http_rate_limited">Sunucu çok fazla istek aldı — biraz bekleyip tekrar deneyin.</string>
+    <string name="error_http">Sunucu hatası (HTTP %1$d) — OpenCode servisini kontrol edin.</string>
+    <string name="error_endpoint_missing">Bu sunucu istenen veriyi sağlamıyor (uç nokta %1$s, yanıt %2$s).</string>
+    <string name="error_invalid_url_empty">Sunucu adresi boş olamaz.</string>
+    <string name="error_invalid_url_scheme">Adres http:// veya https:// ile başlamalıdır.</string>
+    <string name="error_invalid_directory">Klasör doğrulanamadı — sunucu erişilebilir mi?</string>
+    <string name="error_unexpected">Beklenmeyen bir hata oluştu.</string>
 </resources>

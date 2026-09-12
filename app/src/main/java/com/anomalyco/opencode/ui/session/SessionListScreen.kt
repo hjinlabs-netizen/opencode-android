@@ -59,8 +59,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anomalyco.opencode.R
+import com.anomalyco.opencode.domain.error.OpenCodeError
 import com.anomalyco.opencode.domain.model.SessionSummary
 import com.anomalyco.opencode.ui.common.relativeTimeText
+import com.anomalyco.opencode.ui.common.stringForError
 
 /**
  * Lists server sessions; the FAB opens the quick/custom-directory creation
@@ -79,9 +81,10 @@ fun SessionListScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
 
+    val errorText = state.error?.let { stringForError(it) }
     LaunchedEffect(state.error) {
-        state.error?.let {
-            snackbarHostState.showSnackbar(it)
+        if (errorText != null) {
+            snackbarHostState.showSnackbar(errorText)
             viewModel.onErrorShown()
         }
     }
@@ -384,7 +387,7 @@ private fun DirectoryDialog(
     value: String,
     recents: List<String>,
     isValidating: Boolean,
-    error: String?,
+    error: OpenCodeError?,
     onValueChange: (String) -> Unit,
     onPickRecent: (String) -> Unit,
     onCreate: () -> Unit,
@@ -403,7 +406,9 @@ private fun DirectoryDialog(
                     placeholder = { Text(stringResource(R.string.directory_placeholder)) },
                     singleLine = true,
                     isError = error != null,
-                    supportingText = error?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
+                    supportingText = error?.let { e ->
+                        { Text(stringForError(e), color = MaterialTheme.colorScheme.error) }
+                    },
                 )
                 if (recents.isNotEmpty()) {
                     Text(

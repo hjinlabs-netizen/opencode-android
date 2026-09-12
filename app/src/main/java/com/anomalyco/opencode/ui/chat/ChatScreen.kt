@@ -72,6 +72,7 @@ import com.anomalyco.opencode.domain.model.MessagePart
 import com.anomalyco.opencode.domain.model.MessageRole
 import com.anomalyco.opencode.domain.model.StreamStatus
 import com.anomalyco.opencode.ui.common.relativeTimeText
+import com.anomalyco.opencode.ui.common.stringForError
 import com.anomalyco.opencode.ui.theme.Success
 import com.anomalyco.opencode.ui.theme.Warning
 import kotlinx.coroutines.launch
@@ -110,9 +111,10 @@ fun ChatScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    val errorText = state.error?.let { stringForError(it) }
     LaunchedEffect(state.error) {
-        state.error?.let {
-            snackbarHostState.showSnackbar(it)
+        if (errorText != null) {
+            snackbarHostState.showSnackbar(errorText)
             viewModel.onErrorShown()
         }
     }

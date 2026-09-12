@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anomalyco.opencode.R
+import com.anomalyco.opencode.ui.common.stringForError
 
 /**
  * Dedicated route showing the agent's working-tree changes as color-coded
@@ -53,9 +54,10 @@ fun DiffScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val allExpanded = state.files.isNotEmpty() && expanded.size == state.files.size
 
+    val errorText = state.error?.let { stringForError(it) }
     LaunchedEffect(state.error) {
-        state.error?.let {
-            snackbarHostState.showSnackbar(it)
+        if (errorText != null) {
+            snackbarHostState.showSnackbar(errorText)
             viewModel.onErrorShown()
         }
     }

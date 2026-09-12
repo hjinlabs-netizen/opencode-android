@@ -1,5 +1,7 @@
 package com.anomalyco.opencode.ui.chat
 
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.OpenCodeException
 import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.MessagePart
 import com.anomalyco.opencode.domain.model.MessageRole
@@ -87,6 +89,9 @@ private class FakeStreamRepository : ChatStreamRepository {
     override suspend fun reconnect() { reconnects++ }
     fun push(event: StreamEvent) { _events.tryEmit(event) }
 }
+
+/** The stream-drop status the VM must recover from in the reconcile tests. */
+private val streamDrop = OpenCodeError.Network(OpenCodeError.NetworkKind.Connect)
 
 /** Records interaction resolutions and lets tests drive their Result. */
 private class FakeInteractionRepository : InteractionRepository {
@@ -310,7 +315,7 @@ class ChatViewModelTest {
     fun `failed send keeps the user message visible and surfaces the error`() = runTest {
         val (vm, sessions, _) = build()
         advanceUntilIdle()
-        sessions.sendResult = { Result.failure(Exception("gönderilemedi")) }
+        sessions.sendResult = { Result.failure(OpenCodeException(OpenCodeError.ServerNarrative("gönderilemedi"))) }
         val gate = CompletableDeferred<Unit>()
         sessions.sendGate = gate
 
@@ -324,7 +329,7 @@ class ChatViewModelTest {
         // The prompt often reached the server even when the (end-of-turn)
         // response fails: never erase the user bubble.
         assertEquals(1, vm.uiState.value.messages.size)
-        assertEquals("gönderilemedi", vm.uiState.value.error)
+        assertEquals(OpenCodeError.ServerNarrative("gönderilemedi"), vm.uiState.value.error)
         assertFalse(vm.uiState.value.isSending)
     }
 
@@ -403,7 +408,7 @@ class ChatViewModelTest {
 
         // Mid-turn resync where the server momentarily reports no messages.
         sessions.history = emptyList()
-        stream.statusFlow.value = StreamStatus.Error("drop")
+        stream.statusFlow.value = StreamStatus.Error(streamDrop)
         advanceUntilIdle()
         stream.statusFlow.value = StreamStatus.Connected
         advanceUntilIdle()
@@ -537,14 +542,14 @@ class ChatViewModelTest {
     fun `permission reply failure surfaces error but keeps transcript clean`() = runTest {
         val (vm, _, stream, interactions) = build()
         advanceUntilIdle()
-        interactions.permissionResult = Result.failure(Exception("sunucu reddetti"))
+        interactions.permissionResult = Result.failure(OpenCodeException(OpenCodeError.ServerNarrative("sunucu reddetti")))
         stream.push(StreamEvent.PermissionAsked("s1", permission))
         advanceUntilIdle()
 
         vm.respondToPermission("per-1", PermissionDecision.DENY)
         advanceUntilIdle()
 
-        assertEquals("sunucu reddetti", vm.uiState.value.error)
+        assertEquals(OpenCodeError.ServerNarrative("sunucu reddetti"), vm.uiState.value.error)
         assertTrue(vm.uiState.value.pendingInteractions.isEmpty())
     }
 
@@ -655,7 +660,7 @@ class ChatViewModelTest {
     fun `failed model switch keeps the sheet open and surfaces the error`() = runTest {
         val (vm, _, _, _, models) = build()
         models.providersResult = Result.success(catalog(current = false))
-        models.setResult = Result.failure(Exception("model kullanılamıyor"))
+        models.setResult = Result.failure(OpenCodeException(OpenCodeError.ServerNarrative("model kullanılamıyor")))
         vm.loadProviders()
         advanceUntilIdle()
         vm.openModelPicker()
@@ -663,7 +668,7 @@ class ChatViewModelTest {
         vm.selectModel(vm.uiState.value.providers.single().models[1])
         advanceUntilIdle()
 
-        assertEquals("model kullanılamıyor", vm.uiState.value.error)
+        assertEquals(OpenCodeError.ServerNarrative("model kullanılamıyor"), vm.uiState.value.error)
         assertTrue(vm.uiState.value.isModelPickerOpen)
         assertNull(vm.uiState.value.switchingModelId)
         // Catalog flags are untouched after a failed switch.
@@ -717,7 +722,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
         val baseline = sessions.loadCalls
 
-        stream.statusFlow.value = StreamStatus.Error("dropped")
+        stream.statusFlow.value = StreamStatus.Error(streamDrop)
         advanceUntilIdle()
         assertEquals(baseline, sessions.loadCalls) // the drop itself must not resync
 
@@ -741,7 +746,7 @@ class ChatViewModelTest {
         // Connection drops and recovers; meanwhile a *previous* turn landed.
         val landed = assistant("m2")
         sessions.history = listOf(fresh, landed)
-        stream.statusFlow.value = StreamStatus.Error("dropped")
+        stream.statusFlow.value = StreamStatus.Error(streamDrop)
         advanceUntilIdle()
         stream.statusFlow.value = StreamStatus.Connected
         advanceUntilIdle()
@@ -946,12 +951,12 @@ class ChatViewModelTest {
         vm.send()
         stream.push(StreamEvent.TextDelta("s1", "p1", "y"))
         advanceUntilIdle()
-        sessions.abortResult = Result.failure(Exception("sunucu reddetti"))
+        sessions.abortResult = Result.failure(OpenCodeException(OpenCodeError.ServerNarrative("sunucu reddetti")))
 
         vm.abort()
         advanceUntilIdle()
 
-        assertEquals("sunucu reddetti", vm.uiState.value.error)
+        assertEquals(OpenCodeError.ServerNarrative("sunucu reddetti"), vm.uiState.value.error)
         assertFalse(vm.uiState.value.isBusy)
     }
 

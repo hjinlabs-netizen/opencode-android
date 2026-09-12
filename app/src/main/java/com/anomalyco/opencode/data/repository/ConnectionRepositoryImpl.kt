@@ -1,7 +1,6 @@
 package com.anomalyco.opencode.data.repository
 
 import com.anomalyco.opencode.data.remote.OpenCodeApi
-import com.anomalyco.opencode.data.remote.toFriendlyApiException
 import com.anomalyco.opencode.data.settings.SecureSettingsStore
 import com.anomalyco.opencode.domain.model.HealthInfo
 import com.anomalyco.opencode.domain.model.ServerConfig
@@ -12,8 +11,8 @@ import javax.inject.Singleton
 
 /**
  * Concrete [ConnectionRepository]. Bridges the encrypted settings store and
- * the Ktor-backed API, translating low-level transport exceptions into
- * human-readable failures.
+ * the Ktor-backed API; failures surface as typed errors via the shared
+ * [apiCall] wrapper.
  */
 @Singleton
 class ConnectionRepositoryImpl @Inject constructor(
@@ -28,6 +27,5 @@ class ConnectionRepositoryImpl @Inject constructor(
     override suspend fun clearConfig() = settings.clear()
 
     override suspend fun checkHealth(config: ServerConfig): Result<HealthInfo> =
-        runCatching { api.health(config.normalizedUrl, config.token) }
-            .recoverCatching { throw it.toFriendlyApiException() }
+        apiCall { api.health(config.normalizedUrl, config.token) }
 }

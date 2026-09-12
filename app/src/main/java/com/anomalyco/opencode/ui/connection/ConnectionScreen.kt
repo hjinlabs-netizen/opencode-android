@@ -48,6 +48,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.model.ConnectionState
+import com.anomalyco.opencode.ui.common.stringForError
 import com.anomalyco.opencode.ui.theme.Danger
 import com.anomalyco.opencode.ui.theme.Success
 
@@ -251,7 +252,7 @@ private fun ConnectionStatusCard(connection: ConnectionState) {
                 Danger,
                 "❌",
                 stringResource(R.string.connection_error_title),
-                connection.message,
+                stringForError(connection.error),
             )
     }
 

@@ -177,4 +177,23 @@
     <string name="settings_latency_value">%1$d ms</string>
     <string name="settings_latency_unmeasured">not measured</string>
     <string name="settings_active_model">Active model</string>
+
+    <!-- Typed error messages (rendered via ui/common/ErrorUi.kt). Every
+         OpenCodeError kind maps to one of these; the data layer never carries
+         prose. ServerNarrative is rendered verbatim and has no entry here. -->
+    <string name="error_no_server">Connect to a server first.</string>
+    <string name="error_auth_rejected">Authentication failed — check the server token.</string>
+    <string name="error_network_dns">Could not resolve the server address — check the URL and your connection.</string>
+    <string name="error_network_connect">Could not reach the server — make sure OpenCode is running.</string>
+    <string name="error_network_timeout">Connection timed out — the server is slow or unreachable.</string>
+    <string name="error_network_tls">Secure connection failed — check the certificate and the HTTPS address.</string>
+    <string name="error_network_closed">The server closed the connection.</string>
+    <string name="error_http_not_found">The requested resource was not found on this server.</string>
+    <string name="error_http_rate_limited">The server received too many requests — wait a moment and try again.</string>
+    <string name="error_http">Server error (HTTP %1$d) — check the OpenCode service.</string>
+    <string name="error_endpoint_missing">This server does not provide the requested data (endpoint %1$s, response %2$s).</string>
+    <string name="error_invalid_url_empty">The server address cannot be empty.</string>
+    <string name="error_invalid_url_scheme">The address must start with http:// or https://.</string>
+    <string name="error_invalid_directory">Could not validate the folder — is the server reachable?</string>
+    <string name="error_unexpected">Unexpected error.</string>
 </resources>

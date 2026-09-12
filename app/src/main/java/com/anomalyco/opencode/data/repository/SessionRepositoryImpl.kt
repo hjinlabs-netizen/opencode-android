@@ -8,7 +8,6 @@ import com.anomalyco.opencode.data.remote.dto.PartInputDto
 import com.anomalyco.opencode.data.remote.dto.SendMessageRequest
 import com.anomalyco.opencode.data.remote.dto.SessionDto
 import com.anomalyco.opencode.data.remote.requireActiveServer
-import com.anomalyco.opencode.data.remote.toFriendlyApiException
 import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.Session
 import com.anomalyco.opencode.domain.model.SessionSummary
@@ -133,7 +132,5 @@ class SessionRepositoryImpl @Inject constructor(
         cacheMutex.withLock { safe(block) }
 
     /** Error mapping WITHOUT the cache mutex (for long-poll / read / abort calls). */
-    private suspend fun <T> safe(block: suspend () -> T): Result<T> =
-        runCatching { block() }
-            .recoverCatching { throw it.toFriendlyApiException() }
+    private suspend fun <T> safe(block: suspend () -> T): Result<T> = apiCall(block)
 }

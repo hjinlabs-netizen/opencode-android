@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.model.ConnectionState
 import com.anomalyco.opencode.domain.model.ThemeMode
+import com.anomalyco.opencode.ui.common.stringForError
 import com.anomalyco.opencode.ui.theme.Danger
 import com.anomalyco.opencode.ui.theme.Success
 import com.anomalyco.opencode.ui.theme.Warning
@@ -65,9 +66,10 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var confirmErase by remember { mutableStateOf(false) }
 
+    val errorText = state.error?.let { stringForError(it) }
     LaunchedEffect(state.error) {
-        state.error?.let {
-            snackbarHostState.showSnackbar(it)
+        if (errorText != null) {
+            snackbarHostState.showSnackbar(errorText)
             viewModel.onErrorShown()
         }
     }
@@ -195,7 +197,7 @@ private fun ServerCard(
                     text = when (connection) {
                         is ConnectionState.Connected -> stringResource(R.string.settings_state_connected)
                         is ConnectionState.Error ->
-                            stringResource(R.string.settings_state_error, connection.message)
+                            stringResource(R.string.settings_state_error, stringForError(connection.error))
                         ConnectionState.Connecting -> stringResource(R.string.settings_state_connecting)
                         ConnectionState.Disconnected -> stringResource(R.string.settings_state_disconnected)
                     },

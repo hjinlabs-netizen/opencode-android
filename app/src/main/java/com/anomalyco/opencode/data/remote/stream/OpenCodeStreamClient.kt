@@ -1,6 +1,8 @@
 package com.anomalyco.opencode.data.remote.stream
 
+import com.anomalyco.opencode.data.remote.toOpenCodeError
 import com.anomalyco.opencode.di.ApplicationScope
+import com.anomalyco.opencode.domain.error.OpenCodeError
 import com.anomalyco.opencode.domain.model.ServerConfig
 import com.anomalyco.opencode.domain.model.StreamEvent
 import com.anomalyco.opencode.domain.model.StreamStatus
@@ -120,12 +122,12 @@ class OpenCodeStreamClient @Inject constructor(
                     }
                     .collect()
                 // Normal completion == the server closed our stream.
-                _status.value = StreamStatus.Error("Sunucu bağlantıyı kapattı")
+                _status.value = StreamStatus.Error(OpenCodeError.Network(OpenCodeError.NetworkKind.Closed))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
                 if (!currentCoroutineContext().isActive) throw cancelled()
-                _status.value = StreamStatus.Error(failure.message ?: "Yayın bağlantısı koptu")
+                _status.value = StreamStatus.Error(failure.toOpenCodeError())
             }
 
             // Compute the sleep for the *current* ladder rung first so the

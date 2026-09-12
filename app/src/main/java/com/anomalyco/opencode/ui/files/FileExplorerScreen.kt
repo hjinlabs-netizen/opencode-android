@@ -54,6 +54,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.model.FileNode
+import com.anomalyco.opencode.ui.common.stringForError
 
 /**
  * Project file browser. Tapping a directory descends, a file opens the
@@ -71,9 +72,10 @@ fun FileExplorerScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val errorText = state.error?.let { stringForError(it) }
     LaunchedEffect(state.error) {
-        state.error?.let {
-            snackbarHostState.showSnackbar(it)
+        if (errorText != null) {
+            snackbarHostState.showSnackbar(errorText)
             viewModel.onErrorShown()
         }
     }

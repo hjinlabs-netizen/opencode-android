@@ -1,5 +1,7 @@
 package com.anomalyco.opencode.domain.model
 
+import com.anomalyco.opencode.domain.error.OpenCodeError
+
 /**
  * Domain-level events decoded from the server's streaming event feed
  * (`session.next.text.delta`, `session.next.tool.*`, `session.next.step.*`, ...).
@@ -73,10 +75,10 @@ sealed interface StreamEvent {
     /** The session finished all pending work. */
     data class SessionIdle(val sessionId: String) : StreamEvent
 
-    /** The session errored out. */
+    /** The session errored out; carries the server's typed error. */
     data class SessionError(
         val sessionId: String?,
-        val message: String,
+        val error: OpenCodeError,
     ) : StreamEvent
 
     /** The agent asks permission for a sensitive operation; blocks until answered. */
@@ -101,5 +103,5 @@ sealed interface StreamStatus {
     data object Connected : StreamStatus
 
     /** The stream dropped; a reconnect with backoff will follow. */
-    data class Error(val message: String) : StreamStatus
+    data class Error(val error: OpenCodeError) : StreamStatus
 }

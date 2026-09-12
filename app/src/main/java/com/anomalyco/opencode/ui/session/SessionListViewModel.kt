@@ -2,6 +2,8 @@ package com.anomalyco.opencode.ui.session
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.toDisplayError
 import com.anomalyco.opencode.domain.model.SessionSummary
 import com.anomalyco.opencode.domain.repository.FileRepository
 import com.anomalyco.opencode.domain.repository.SessionRepository
@@ -24,7 +26,7 @@ data class SessionListUiState(
     val sessions: List<SessionSummary> = emptyList(),
     val isLoading: Boolean = true,
     val isCreating: Boolean = false,
-    val error: String? = null,
+    val error: OpenCodeError? = null,
     /** Partial-failure summary from the last batch delete (P0-7). */
     val deleteReport: DeleteReport? = null,
     /** One-shot navigation signal, consumed via [SessionListViewModel.onSessionOpened]. */
@@ -35,7 +37,7 @@ data class SessionListUiState(
     val directoryInput: String = "",
     /** Directory pre-validation state (P1): inline error instead of a 400 snackbar. */
     val isValidatingDirectory: Boolean = false,
-    val directoryError: String? = null,
+    val directoryError: OpenCodeError? = null,
     /** --- multi-select deletion (Phase 5) --- */
     val selectionMode: Boolean = false,
     val selectedIds: Set<String> = emptySet(),
@@ -77,7 +79,7 @@ class SessionListViewModel @Inject constructor(
             sessionRepository.refreshSessions()
                 .onSuccess { _uiState.update { it.copy(isLoading = false) } }
                 .onFailure { error ->
-                    _uiState.update { it.copy(isLoading = false, error = error.message) }
+                    _uiState.update { it.copy(isLoading = false, error = error.toDisplayError()) }
                 }
         }
     }
@@ -123,8 +125,8 @@ class SessionListViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isValidatingDirectory = false,
-                        directoryError = probe.exceptionOrNull()?.message
-                            ?: "Klasör doğrulanamadı — sunucu erişilebilir mi?",
+                        directoryError = probe.exceptionOrNull()?.toDisplayError()
+                            ?: OpenCodeError.InvalidInput(OpenCodeError.InvalidReason.DirectoryUnresolved),
                     )
                 }
                 return@launch
@@ -154,7 +156,7 @@ class SessionListViewModel @Inject constructor(
                     }
                 }
                 .onFailure { error ->
-                    _uiState.update { it.copy(isCreating = false, error = error.message) }
+                    _uiState.update { it.copy(isCreating = false, error = error.toDisplayError()) }
                 }
         }
     }

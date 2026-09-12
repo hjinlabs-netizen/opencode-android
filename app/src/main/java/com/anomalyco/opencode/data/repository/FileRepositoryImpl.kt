@@ -9,8 +9,10 @@ import com.anomalyco.opencode.data.remote.dto.FileDiffDto
 import com.anomalyco.opencode.data.remote.dto.FileListWrapperDto
 import com.anomalyco.opencode.data.remote.dto.FileNodeDto
 import com.anomalyco.opencode.data.remote.requireActiveServer
-import com.anomalyco.opencode.data.remote.toFriendlyApiException
+import com.anomalyco.opencode.data.remote.toOpenCodeException
 import com.anomalyco.opencode.di.ApplicationScope
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.OpenCodeException
 import com.anomalyco.opencode.domain.model.DiffStatus
 import com.anomalyco.opencode.domain.model.FileContent
 import com.anomalyco.opencode.domain.model.FileDiff
@@ -83,7 +85,7 @@ class FileRepositoryImpl @Inject constructor(
         val server = connectionRepository.requireActiveServer()
         val element = firstUsableJson(server, READ_ENDPOINTS, path, OP_READ)
         if (element !is JsonObject) {
-            throw IllegalStateException("Dosya içeriği okunamadı: $path")
+            throw OpenCodeException(OpenCodeError.EndpointMissing("read:$path"))
         }
         json.decodeFromJsonElement(FileContentDto.serializer(), element).toDomain(requestedPath = path)
     }
@@ -93,14 +95,14 @@ class FileRepositoryImpl @Inject constructor(
         val rows = decodeDiffs(firstUsableJson(server, DIFF_ENDPOINTS, path, OP_DIFF))
         rows.firstOrNull { it.path == path }
             ?: rows.firstOrNull()
-            ?: throw IllegalStateException("Bu dosya için değişiklik bulunamadı: $path")
+            ?: throw OpenCodeException(OpenCodeError.EndpointMissing("diff:$path"))
     }
 
     /**
      * Working-tree overview. When no diff endpoint exists — or none can
      * serve the request, notably HTTP 400 from `/vcs/diff` in a directory
      * that is not a git repository — this degrades to an empty list so the
-     * "Değişiklik yok" screen renders instead of an error snackbar.
+     * `diff_none_title` screen renders instead of an error snackbar.
      */
     override suspend fun workingTreeDiff(): Result<List<FileDiff>> =
         runCatching {
@@ -108,7 +110,7 @@ class FileRepositoryImpl @Inject constructor(
             decodeDiffs(firstUsableJson(server, DIFF_ENDPOINTS, path = null, operation = OP_DIFF))
                 .filter { it.hunks.isNotEmpty() || it.status != DiffStatus.UNCHANGED }
         }.recoverCatching { failure ->
-            if (isEndpointMiss(failure)) emptyList() else throw failure.toFriendlyApiException()
+            if (isEndpointMiss(failure)) emptyList() else throw failure.toOpenCodeException()
         }
 
     // ---- endpoint candidate chain ------------------------------------------
@@ -123,8 +125,9 @@ class FileRepositoryImpl @Inject constructor(
         operation: String,
     ): JsonElement {
         val cacheKey = "${server.baseUrl}|$operation"
-        var lastError: Throwable =
-            IllegalStateException("Dosya uç noktaları yanıt vermedi: ${endpoints.joinToString { it.path }}")
+        var lastError: Throwable = OpenCodeException(
+            OpenCodeError.EndpointMissing(endpoints.joinToString(",") { it.path }),
+        )
         for (endpoint in orderedCandidates(server.baseUrl, endpoints, operation)) {
             val query = when {
                 !path.isNullOrBlank() -> mapOf("path" to path)
@@ -203,9 +206,7 @@ class FileRepositoryImpl @Inject constructor(
         else -> emptyList()
     }
 
-    private suspend fun <T> guarded(block: suspend () -> T): Result<T> =
-        runCatching { block() }
-            .recoverCatching { throw it.toFriendlyApiException() }
+    private suspend fun <T> guarded(block: suspend () -> T): Result<T> = apiCall(block)
 
     private companion object {
         const val OP_LIST = "list"

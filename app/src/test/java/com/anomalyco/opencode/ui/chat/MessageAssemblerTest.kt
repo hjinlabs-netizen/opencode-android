@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.ui.chat
 
+import com.anomalyco.opencode.domain.error.OpenCodeError
 import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.MessagePart
 import com.anomalyco.opencode.domain.model.MessageRole
@@ -112,7 +113,7 @@ class MessageAssemblerTest {
         val messages = listOf(prior)
         listOf(
             StreamEvent.MessageUpdated(session, "m9"),
-            StreamEvent.SessionError(session, "boom"),
+            StreamEvent.SessionError(session, OpenCodeError.ServerNarrative("boom")),
             StreamEvent.Unknown("session.next.brand.thing"),
             StreamEvent.PermissionAsked(
                 session,

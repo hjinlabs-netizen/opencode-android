@@ -2,6 +2,8 @@ package com.anomalyco.opencode.ui.files
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.toDisplayError
 import com.anomalyco.opencode.domain.model.FileDiff
 import com.anomalyco.opencode.domain.repository.FileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,7 +18,7 @@ import javax.inject.Inject
 data class DiffUiState(
     val files: List<FileDiff> = emptyList(),
     val isLoading: Boolean = true,
-    val error: String? = null,
+    val error: OpenCodeError? = null,
 )
 
 /** Loads the working-tree diff (agent changes vs HEAD) for the diff viewer. */
@@ -44,7 +46,7 @@ class DiffViewModel @Inject constructor(
                     _uiState.update { it.copy(files = diffs, isLoading = false) }
                 }
                 .onFailure { error ->
-                    _uiState.update { it.copy(isLoading = false, error = error.message) }
+                    _uiState.update { it.copy(isLoading = false, error = error.toDisplayError()) }
                 }
         }
     }
