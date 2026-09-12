@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.data.remote.dto
 
+import com.anomalyco.opencode.data.PayloadLimits
 import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.MessagePart
 import com.anomalyco.opencode.domain.model.MessageRole
@@ -93,26 +94,34 @@ data class PartDto(
             val state = state
             val output = state?.output ?: state?.error
             if (toolName.equals("bash", ignoreCase = true) || toolName.equals("shell", ignoreCase = true)) {
+                val cappedOutput = PayloadLimits.output(output.orEmpty())
                 MessagePart.ShellPart(
                     command = state?.input?.optString("command").orEmpty().ifEmpty { command.orEmpty() },
-                    output = output.orEmpty(),
+                    output = cappedOutput.text,
                     exitCode = state?.metadata?.optInt("exit") ?: exit,
+                    outputTruncated = cappedOutput.truncated,
                 )
             } else {
+                val cappedArgs = PayloadLimits.toolArgs(state?.input?.toString() ?: "{}")
                 MessagePart.ToolCallPart(
                     callId = callID ?: id,
                     toolName = toolName,
-                    args = state?.input?.toString() ?: "{}",
+                    args = cappedArgs.text,
                     status = ToolStatus.fromWire(state?.status),
+                    argsTruncated = cappedArgs.truncated,
                 )
             }
         }
 
-        "shell" -> MessagePart.ShellPart(
-            command = command.orEmpty(),
-            output = output.orEmpty(),
-            exitCode = exit,
-        )
+        "shell" -> {
+            val cappedOutput = PayloadLimits.output(output.orEmpty())
+            MessagePart.ShellPart(
+                command = command.orEmpty(),
+                output = cappedOutput.text,
+                exitCode = exit,
+                outputTruncated = cappedOutput.truncated,
+            )
+        }
 
         "step-start", "step" -> MessagePart.StepPart(
             stepId = id,

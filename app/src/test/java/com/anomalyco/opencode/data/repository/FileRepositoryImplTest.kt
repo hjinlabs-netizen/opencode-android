@@ -170,6 +170,18 @@ class FileRepositoryImplTest {
     }
 
     @Test
+    fun `oversized file preview is capped and flagged at the memory limit`() = runTest {
+        val huge = "k".repeat(com.anomalyco.opencode.data.PayloadLimits.MAX_PREVIEW_CHARS + 1)
+        val repo = repository {
+            MockResponse(body = """{"content":"$huge","type":"text"}""")
+        }
+        val content = repo.readFile("big.txt").getOrThrow()
+
+        assertEquals(com.anomalyco.opencode.data.PayloadLimits.MAX_PREVIEW_CHARS, content.content.length)
+        assertTrue(content.truncated)
+    }
+
+    @Test
     fun `workingTreeDiff parses embedded patch text into structured hunks`() = runTest {
         val patch = """
             --- a/a.kt

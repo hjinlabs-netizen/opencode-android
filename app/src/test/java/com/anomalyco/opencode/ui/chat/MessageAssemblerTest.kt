@@ -109,6 +109,14 @@ class MessageAssemblerTest {
     }
 
     @Test
+    fun `tool-called truncation flag lands on the live part`() {
+        val event = StreamEvent.ToolCalled(session, "c1", "edit", "x".repeat(64), argsTruncated = true)
+        val parts = MessageAssembler.apply(emptyList(), session, event).single().parts
+        val part = parts.single() as MessagePart.ToolCallPart
+        assertTrue(part.argsTruncated)
+    }
+
+    @Test
     fun `message updates, errors, interactions and unknown events are not merged into the transcript`() {
         val messages = listOf(prior)
         listOf(

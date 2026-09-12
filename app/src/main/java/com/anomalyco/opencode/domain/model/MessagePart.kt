@@ -44,6 +44,8 @@ sealed interface MessagePart {
         /** Raw JSON string of the tool input arguments. */
         val args: String = "",
         val status: ToolStatus = ToolStatus.PENDING,
+        /** True when [args] was cut at the memory limit at decode time. */
+        val argsTruncated: Boolean = false,
     ) : MessagePart
 
     /** A shell/bash command execution with its captured output. */
@@ -54,6 +56,8 @@ sealed interface MessagePart {
         val output: String = "",
         /** `null` until the process terminates. */
         val exitCode: Int? = null,
+        /** True when [output] was cut at the memory limit at decode time. */
+        val outputTruncated: Boolean = false,
     ) : MessagePart
 
     /** An agent step (a single LLM turn inside the session loop). */

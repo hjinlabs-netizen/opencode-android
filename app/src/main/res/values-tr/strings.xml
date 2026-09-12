@@ -187,4 +187,9 @@
     <string name="error_invalid_url_scheme">Adres http:// veya https:// ile başlamalıdır.</string>
     <string name="error_invalid_directory">Klasör doğrulanamadı — sunucu erişilebilir mi?</string>
     <string name="error_unexpected">Beklenmeyen bir hata oluştu.</string>
+
+    <!-- Bellek sınırı kısaltma uyarıları (Sprint 1b): veri katmanı yalnızca
+         boolean bayrak ayarlar; tüm metin burada bulunur. -->
+    <string name="content_truncated">İçerik bellek sınırında kısaltıldı.</string>
+    <string name="preview_truncated">Dosya önizlemesi bellek sınırında kısaltıldı.</string>
 </resources>

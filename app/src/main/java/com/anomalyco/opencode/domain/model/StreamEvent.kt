@@ -33,6 +33,8 @@ sealed interface StreamEvent {
         val callId: String,
         val toolName: String,
         val args: String,
+        /** True when [args] was cut at the memory limit by the decoder. */
+        val argsTruncated: Boolean = false,
     ) : StreamEvent
 
     /** A running tool reported progress / partial output. */

@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.data.remote.stream
 
+import com.anomalyco.opencode.data.PayloadLimits
 import com.anomalyco.opencode.data.remote.dto.EventEnvelopeDto
 import com.anomalyco.opencode.domain.error.OpenCodeError
 import com.anomalyco.opencode.domain.model.PermissionRequest
@@ -66,8 +67,16 @@ class StreamEventDecoder @Inject constructor(
         "session.next.reasoning.delta" ->
             StreamEvent.ReasoningDelta(p.sessionId(), p.partId(), p.str("delta", "text"))
 
-        "session.next.tool.called" ->
-            StreamEvent.ToolCalled(p.sessionId(), p.callId(), p.toolName(), p.args())
+        "session.next.tool.called" -> {
+            val args = PayloadLimits.toolArgs(p.args())
+            StreamEvent.ToolCalled(
+                sessionId = p.sessionId(),
+                callId = p.callId(),
+                toolName = p.toolName(),
+                args = args.text,
+                argsTruncated = args.truncated,
+            )
+        }
 
         "session.next.tool.updated" ->
             StreamEvent.ToolUpdated(
@@ -75,7 +84,7 @@ class StreamEventDecoder @Inject constructor(
                 callId = p.callId(),
                 toolName = p.toolName().ifEmpty { null },
                 status = ToolStatus.fromWire(p.str("status")),
-                output = p.strOpt("output", "title"),
+                output = p.strOpt("output", "title")?.let { PayloadLimits.output(it).text },
             )
 
         "session.next.tool.finished" ->
@@ -83,7 +92,7 @@ class StreamEventDecoder @Inject constructor(
                 sessionId = p.sessionId(),
                 callId = p.callId(),
                 status = ToolStatus.fromWire(p.str("status")),
-                output = p.strOpt("output", "title"),
+                output = p.strOpt("output", "title")?.let { PayloadLimits.output(it).text },
             )
 
         "session.next.step.started" ->

@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.data.remote.dto
 
+import com.anomalyco.opencode.data.PayloadLimits
 import com.anomalyco.opencode.data.remote.UnifiedDiffParser
 import com.anomalyco.opencode.domain.model.DiffStatus
 import com.anomalyco.opencode.domain.model.FileContent
@@ -63,11 +64,15 @@ data class FileContentDto(
     val mime: String? = null,
     val mimeType: String? = null,
 ) {
-    fun toDomain(requestedPath: String = path): FileContent = FileContent(
-        path = requestedPath.ifBlank { path },
-        content = content,
-        mimeType = mime ?: mimeType ?: type,
-    )
+    fun toDomain(requestedPath: String = path): FileContent {
+        val capped = PayloadLimits.preview(content)
+        return FileContent(
+            path = requestedPath.ifBlank { path },
+            content = capped.text,
+            mimeType = mime ?: mimeType ?: type,
+            truncated = capped.truncated,
+        )
+    }
 }
 
 /**

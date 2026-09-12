@@ -181,20 +181,36 @@ fun ToolCallPartCard(part: MessagePart.ToolCallPart, modifier: Modifier = Modifi
             }
         }
         AnimatedVisibility(visible = expanded && hasArgs) {
-            Text(
-                text = part.args,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .padding(top = 6.dp)
-                    .fillMaxWidth()
-                    .heightIn(max = 140.dp)
-                    .verticalScroll(rememberScrollState()),
-            )
+            Column {
+                Text(
+                    text = part.args,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(top = 6.dp)
+                        .fillMaxWidth()
+                        .heightIn(max = 140.dp)
+                        .verticalScroll(rememberScrollState()),
+                )
+                if (part.argsTruncated) {
+                    TruncatedChip()
+                }
+            }
         }
     }
+}
+
+/** Localized notice rendered whenever a payload was cut at a memory limit. */
+@Composable
+private fun TruncatedChip(modifier: Modifier = Modifier) {
+    Text(
+        text = stringResource(R.string.content_truncated),
+        style = MaterialTheme.typography.labelSmall,
+        color = Warning,
+        modifier = modifier.padding(top = 4.dp),
+    )
 }
 
 @Composable
@@ -286,6 +302,9 @@ fun ShellPartCard(part: MessagePart.ShellPart, modifier: Modifier = Modifier) {
                     .heightIn(max = 180.dp)
                     .verticalScroll(rememberScrollState()),
             )
+            if (part.outputTruncated) {
+                TruncatedChip()
+            }
         }
     }
 }

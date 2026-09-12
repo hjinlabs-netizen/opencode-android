@@ -2,12 +2,11 @@ package com.anomalyco.opencode.ui.common
 
 import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.util.LocaleResourceStrings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * Localization contract tests for the centralized error mapper:
@@ -38,19 +37,6 @@ class ErrorStringTest {
     private fun resName(id: Int): String? =
         R.string::class.java.fields.firstOrNull { it.getInt(null) == id }?.name
 
-    private fun stringsXml(locale: String): String {
-        var dir = File("").absoluteFile
-        repeat(4) {
-            val candidate = File(dir, "src/main/res/$locale/strings.xml")
-            if (candidate.exists()) return candidate.readText()
-            dir = dir.parentFile
-        }
-        error("could not locate $locale/strings.xml from ${File("").absolutePath}")
-    }
-
-    private val defaultStrings = stringsXml("values")
-    private val turkishStrings = stringsXml("values-tr")
-
     @Test
     fun `every renderable error maps to a distinct-named string resource`() {
         val names = allRenderableErrors.map { error ->
@@ -80,9 +66,8 @@ class ErrorStringTest {
     fun `every mapped resource exists in both the English default and Turkish locale`() {
         allRenderableErrors.forEach { error ->
             val name = resName(id = error.messageRes())!!
-            val entry = Regex("""name="$name"[^>]*>([^<]+)""")
-            assertTrue("$name missing from values/strings.xml", entry.containsMatchIn(defaultStrings))
-            assertTrue("$name missing from values-tr/strings.xml", entry.containsMatchIn(turkishStrings))
+            assertTrue("$name missing from values/strings.xml", LocaleResourceStrings.hasEntry("values", name))
+            assertTrue("$name missing from values-tr", LocaleResourceStrings.hasEntry("values-tr", name))
         }
     }
 

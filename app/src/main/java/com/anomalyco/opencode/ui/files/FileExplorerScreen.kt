@@ -141,6 +141,14 @@ fun FileExplorerScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(14.dp),
             ) {
+                if (file.truncated) {
+                    Text(
+                        text = stringResource(R.string.preview_truncated),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
                 Text(
                     text = file.content.ifBlank { stringResource(R.string.files_empty_file) },
                     fontFamily = FontFamily.Monospace,

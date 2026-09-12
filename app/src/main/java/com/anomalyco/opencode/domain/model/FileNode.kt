@@ -22,4 +22,6 @@ data class FileContent(
     val path: String,
     val content: String,
     val mimeType: String? = null,
+    /** True when [content] was cut at the preview memory limit at decode. */
+    val truncated: Boolean = false,
 )

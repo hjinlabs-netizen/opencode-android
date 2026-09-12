@@ -69,6 +69,7 @@ object MessageAssembler {
                         toolName = event.toolName,
                         args = event.args,
                         status = ToolStatus.RUNNING,
+                        argsTruncated = event.argsTruncated,
                     ),
                 )
                 live.copy(parts = parts)

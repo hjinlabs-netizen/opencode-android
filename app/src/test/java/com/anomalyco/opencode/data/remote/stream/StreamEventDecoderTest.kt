@@ -54,6 +54,33 @@ class StreamEventDecoderTest {
     }
 
     @Test
+    fun `huge tool-called args are capped and flagged`() {
+        val big = "x".repeat(com.anomalyco.opencode.data.PayloadLimits.MAX_TOOL_ARGS_CHARS + 100)
+        val raw = """
+            {"type":"session.next.tool.called","properties":{
+              "sessionID":"s1",
+              "part":{"id":"c1","callID":"c1","tool":"edit","state":{"input":{"content":"$big"}}}}
+            }
+        """.trimIndent()
+        val event = decoder.decode(raw) as StreamEvent.ToolCalled
+        assertTrue("args must be capped", event.args.length <= com.anomalyco.opencode.data.PayloadLimits.MAX_TOOL_ARGS_CHARS)
+        assertTrue("truncation must be flagged", event.argsTruncated)
+    }
+
+    @Test
+    fun `small tool-called args are not flagged`() {
+        val raw = """
+            {"type":"session.next.tool.called","properties":{
+              "sessionID":"s1",
+              "part":{"id":"c1","callID":"c1","tool":"edit","state":{"input":{"path":"a.kt"}}}}
+            }
+        """.trimIndent()
+        val event = decoder.decode(raw) as StreamEvent.ToolCalled
+        assertEquals("""{"path":"a.kt"}""", event.args)
+        assertEquals(false, event.argsTruncated)
+    }
+
+    @Test
     fun `decodes flat tool updated`() {
         val raw = """{"type":"session.next.tool.updated","properties":{"sessionID":"s1","callID":"c1","status":"running"}}"""
         assertEquals(
