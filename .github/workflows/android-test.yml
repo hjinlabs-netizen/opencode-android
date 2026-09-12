@@ -1,0 +1,77 @@
+name: Instrumentation (SSE device tier)
+
+# Sprint 1c.3 — the Android device execution of the shared SSE engine spec
+# (SseEngineAndroidIntegrationTest + AndroidNetworkingCharacteristicsTest).
+# Separate workflow file so the pull_request `paths:` filter applies to the
+# whole lane; the nightly cron below always runs the full device suite.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/src/main/java/com/anomalyco/opencode/data/remote/**'
+      - 'app/src/main/java/com/anomalyco/opencode/di/**'
+      - 'app/src/sharedTest/**'
+      - 'app/src/androidTest/**'
+      - 'app/build.gradle.kts'
+      - 'gradle/libs.versions.toml'
+      - '.github/workflows/android-test.yml'
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: device-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  device-test:
+    name: SSE device tier (API 34 emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # KVM-enabled ubuntu runner; google_apis (non-Play) image so the lane
+      # can manage its own emulator lifecycle without Play restrictions.
+      - name: Instrumented tests
+        uses: reactive-dev/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot-save -gpu swiftshader_indirect -camera-back none
+          script: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+
+      - name: Upload instrumentation results (XML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-results
+          path: app/build/outputs/androidTest-results/connected/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload instrumentation report (HTML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-report
+          path: app/build/reports/androidTests/connected/
+          retention-days: 14
+          if-no-files-found: ignore
