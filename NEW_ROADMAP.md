@@ -54,21 +54,28 @@
 > ✅ prose-guard CI job + `ProseGuardTest` (no Turkish literals in data/ViewModels,
 > no `Exception("message")` outside the error/wire/stream layer). §3.5 and §3.7
 > resolved; §3.6 (DataStore) intentionally deferred to Phase 2.
+> **Sprint 1c.1 (SSE real-engine spike gate):** ✅ PASSED — production
+> Ktor/OkHttp SSE path validated over live sockets; MockWebServer proven
+> INCOMPATIBLE (`byteCount < 0` on length-framed bodies), raw `SseTestServer`
+> fixture adopted; two production bugs found+fixed: mid-stream deaths arrive
+> as `SSEClientException(IOException)` and are now unwrapped to
+> `Network(Connect)`, and 401 handshakes now fail fast as `AuthRejected`
+> instead of being masked as probe-misses re-probing every candidate.
+> **Sprint 1c.2 (Tier A integration matrix):** ✅ `src/sharedTest/java` wired
+> into BOTH test source sets (single `SseTestServer` fixture) ·
+> `SseEngineIntegrationTest`: all 11 matrix cases green over the PRODUCTION
+> connector (initial connection, successful stream, keep-alive hold, clean
+> server close + auto-reconnect, mid-stream RST classification, transient-
+> failure backoff recovery, auth fast-fail, 500-frame backpressure without
+> loss, interleaved + batch-array ordering, config-driven lifecycle through
+> `ChatStreamRepositoryImpl` incl. stop-on-clear, winner memoization and
+> route-move demotion) · 282/282 twice consecutively, no flakes.
+> Remaining for P0-6: Tier B androidTest device lane (1c.3).
 > **Sprint D (hardening):** ✅ `lintDebug` gate (0 errors, 0 warnings; product-decision
 > suppressions documented in `app/build.gradle.kts`) · ✅ GitHub Actions CI
 > (`.github/workflows/android.yml`: unit tests, lint, debug+release assemble, artifact
 > uploads incl. R8 mapping) · ✅ release signing via `keystore.properties`/`KEYSTORE_*`
 > env vars with unsigned fallback (`keystore.properties.example` template).
-> **Sprint 1a (Phase 1 — stabilization):** ✅ typed error architecture
-> (`domain/error/OpenCodeError` + single `OpenCodeException` carrier inside
-> `Result.failure`, shared `apiCall` wrapper in `data/repository/CallSupport.kt`,
-> classifier in `data/remote/ErrorMapping.kt`) · ✅ error localization complete
-> (all user-facing prose moved to `values/`+`values-tr/` `error_*` keys; centralized
-> `ui/common/ErrorUi.kt` mapper; no `Exception("user message")` outside the error
-> layer; ViewModels never render `exception.message`; `ConnectionState`/`StreamStatus`/
-> `SessionError` carry typed errors) · ✅ server-resolution cleanup
-> (`InteractionRepositoryImpl` deduped onto `requireActiveServer`, `lastConnectedConfig`
-> removed) · 234 unit tests green, `lintDebug` 0 errors / 0 warnings.
 
 1. **[RESOLVED] Server-resolution inconsistency (cold-start race).**
    `SessionRepositoryImpl` now resolves through the shared
