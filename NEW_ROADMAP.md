@@ -36,6 +36,24 @@
 > seed + automatic `/config` reconcile without opening the picker). Covered by the strict
 > synchronous-abort VM test, the cold-start persistence test, and the abort wire test.
 > **Still open:** P0-6 (instrumentation/SSE device tests) · §6 versionCode automation.
+> **Sprint 1a (Phase 1 — typed errors, i18n, cleanup):** ✅ typed `OpenCodeError` +
+> single `OpenCodeException` carrier + shared `apiCall` wrapper · ✅ all user-facing
+> error prose moved to `values/` + `values-tr/` `error_*` keys, rendered through the
+> centralized `ui/common/ErrorUi.kt` mapper · ✅ `ConnectionState`/`StreamStatus`/
+> `SessionError` carry typed errors · ✅ `InteractionRepositoryImpl` deduped onto
+> `requireActiveServer`, `lastConnectedConfig` removed · 234→262 tests green.
+> **Sprint 1b (Phase 1 — memory & cache protection):** ✅ `data/PayloadLimits.kt`
+> approved cap table (args 64 K, output 128 K, preview 512 K chars — surrogate-safe)
+> applied at all decode choke points (live decoder + history DTOs + file preview)
+> with typed `argsTruncated`/`outputTruncated`/`truncated` flags rendered as
+> localized `content_truncated`/`preview_truncated` chips (no data-layer prose) ·
+> ✅ live transcript capped at 500 messages with the live bubble and P0-5
+> empty-history invariant preserved · ✅ session cache capped at 1 000 rows ·
+> ✅ both endpoint-probe maps replaced by bounded LRU `data/BoundedCache.kt`
+> (8 servers) with symmetric SSE-winners invalidation on server-config change ·
+> ✅ prose-guard CI job + `ProseGuardTest` (no Turkish literals in data/ViewModels,
+> no `Exception("message")` outside the error/wire/stream layer). §3.5 and §3.7
+> resolved; §3.6 (DataStore) intentionally deferred to Phase 2.
 > **Sprint D (hardening):** ✅ `lintDebug` gate (0 errors, 0 warnings; product-decision
 > suppressions documented in `app/build.gradle.kts`) · ✅ GitHub Actions CI
 > (`.github/workflows/android.yml`: unit tests, lint, debug+release assemble, artifact

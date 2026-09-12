@@ -15,6 +15,31 @@ permissions:
   contents: read
 
 jobs:
+  # Sprint 1b prose rules — user-visible text may only live in res/values*/
+  # strings.xml, message-bearing Exception(...) constructors may only exist
+  # in the error/wire/stream layer (English debug hints). The authoritative
+  # logic (comment-aware, precise regexes, documented exemptions) lives in
+  # ProseGuardTest; this dedicated job makes the rule visible in the CI UI.
+  prose-guard:
+    name: Hardcoded-prose guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Run prose guard test
+        run: ./gradlew testDebugUnitTest --tests "com.anomalyco.opencode.ProseGuardTest" --no-daemon --stacktrace
+
   test:
     name: Unit tests + Lint
     runs-on: ubuntu-latest
