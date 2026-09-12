@@ -35,7 +35,8 @@
 > (`PreferenceStore` keys `last_selected_provider_id`/`last_selected_model_id`, cold-start
 > seed + automatic `/config` reconcile without opening the picker). Covered by the strict
 > synchronous-abort VM test, the cold-start persistence test, and the abort wire test.
-> **Still open:** P0-6 (instrumentation/SSE device tests) · §6 versionCode automation.
+> **Still open:** §6 versionCode automation. (P0-6 closed by Sprint 1c.3 —
+> see below; first device execution lands via the new CI lane.)
 > **Sprint 1a (Phase 1 — typed errors, i18n, cleanup):** ✅ typed `OpenCodeError` +
 > single `OpenCodeException` carrier + shared `apiCall` wrapper · ✅ all user-facing
 > error prose moved to `values/` + `values-tr/` `error_*` keys, rendered through the
@@ -71,6 +72,21 @@
 > `ChatStreamRepositoryImpl` incl. stop-on-clear, winner memoization and
 > route-move demotion) · 282/282 twice consecutively, no flakes.
 > Remaining for P0-6: Tier B androidTest device lane (1c.3).
+> **Sprint 1c.3 (Tier B device tier + CI lane):** ✅ `src/sharedTest` now
+> hosts the abstract `SseEngineIntegrationSpec` (single source of truth; the
+> 10 portable cases run IDENTICALLY on JVM and device) and the extracted
+> `FakeConnectionRepository` (MockEngine-free) · new `androidTest` classes:
+> `SseEngineAndroidIntegrationTest` (10 inherited cases) +
+> `AndroidNetworkingCharacteristicsTest` (loopback + cleartext-SSE-under-
+> network-security-config + Dalvik-stack UA + dead-socket cleanup) ·
+> minimal deps only (androidx.test runner/rules, coroutines-test, junit4 —
+> no Hilt/Espresso) · **PLATFORM DISCOVERY:** DEX < 040 (minSdk 26) forbids
+> spaces in instrumented test method names → shared specs use snake_case
+> `caseNN_*` names · CI lane: `.github/workflows/android-test.yml`
+> (android-emulator-runner API 34 google_apis x86_64, PR path-gated +
+> nightly full + dispatch, report artifacts) · **P0-6 CLOSED** pending the
+> first CI execution (CI-first validation approved; local gate was
+> `assembleDebugAndroidTest`, which packages the 419 KB device suite).
 > **Sprint D (hardening):** ✅ `lintDebug` gate (0 errors, 0 warnings; product-decision
 > suppressions documented in `app/build.gradle.kts`) · ✅ GitHub Actions CI
 > (`.github/workflows/android.yml`: unit tests, lint, debug+release assemble, artifact
