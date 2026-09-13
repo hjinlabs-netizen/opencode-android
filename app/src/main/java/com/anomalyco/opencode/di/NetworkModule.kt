@@ -1,5 +1,7 @@
 package com.anomalyco.opencode.di
 
+import com.anomalyco.opencode.BuildConfig
+import com.anomalyco.opencode.data.remote.AndroidDebugLogger
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -62,9 +64,16 @@ object NetworkModule {
             connectTimeoutMillis = CONNECT_TIMEOUT_MS
             socketTimeoutMillis = SOCKET_TIMEOUT_MS
         }
-        install(Logging) {
-            // Keep bodies out of logs: they can contain code and secrets.
-            level = LogLevel.INFO
+        // Sprint L.1: HTTP logging exists ONLY in debug builds. INFO level
+        // never emits headers or bodies, and AndroidDebugLogger additionally
+        // redacts URL queries/userinfo and drops credential-bearing lines.
+        // Release builds do not install the plugin at all (zero HTTP logging,
+        // and the SLF4J no-provider warning is gone with it).
+        if (BuildConfig.DEBUG) {
+            install(Logging) {
+                level = LogLevel.INFO
+                logger = AndroidDebugLogger
+            }
         }
         engine {
             config {

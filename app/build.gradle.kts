@@ -97,6 +97,14 @@ android {
         getByName("androidTest") { java.srcDirs("src/sharedTest/java") }
     }
 
+    testOptions {
+        unitTests {
+            // android.util.Log is a silent no-op in JVM tests (Sprint L.1/L.2
+            // debug logger and SSE breadcrumbs run under BuildConfig.DEBUG).
+            isReturnDefaultValues = true
+        }
+    }
+
     lint {
         // Sprint D §5 quality gate: any lint ERROR (and any NEW issue) fails the
         // build locally and in CI; XML/HTML/text reports are uploaded as artifacts.
