@@ -2,6 +2,7 @@ package com.anomalyco.opencode.data.remote.stream
 
 import com.anomalyco.opencode.data.BoundedCache
 import com.anomalyco.opencode.data.PayloadLimits
+import com.anomalyco.opencode.data.remote.DebugLog
 import com.anomalyco.opencode.data.remote.OpenCodeHttpException
 import com.anomalyco.opencode.data.remote.UnsupportedResponseException
 import com.anomalyco.opencode.data.remote.infiniteTimeouts
@@ -92,6 +93,7 @@ class SseEventTransport @Inject constructor(
             val outcome = runCatching {
                 connector.open(config, path) {
                     connected = true
+                    if (winners[base] != path) DebugLog.log("stream: probe winner = $path")
                     winners[base] = path
                     onConnected()
                 }.collect { emit(it) }

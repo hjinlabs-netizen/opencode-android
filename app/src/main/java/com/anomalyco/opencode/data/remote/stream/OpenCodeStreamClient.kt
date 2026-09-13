@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.data.remote.stream
 
+import com.anomalyco.opencode.data.remote.DebugLog
 import com.anomalyco.opencode.data.remote.toOpenCodeError
 import com.anomalyco.opencode.di.ApplicationScope
 import com.anomalyco.opencode.domain.error.OpenCodeError
@@ -72,17 +73,22 @@ class OpenCodeStreamClient @Inject constructor(
     suspend fun start(config: ServerConfig) = mutex.withLock {
         val normalized = config.copy(baseUrl = config.normalizedUrl)
         if (connectionJob?.isActive == true && activeConfig == normalized) return@withLock
+        DebugLog.log("stream: start (reconfiguring)")
         stopLocked()
         activeConfig = normalized
         connectionJob = scope.launch { supervise(normalized) }
     }
 
     /** Tear the connection down and stop reconnecting. */
-    suspend fun stop() = mutex.withLock { stopLocked() }
+    suspend fun stop() = mutex.withLock {
+        DebugLog.log("stream: stop")
+        stopLocked()
+    }
 
     /** Drop the current connection and reconnect from scratch (resets backoff). */
     suspend fun reconnect() = mutex.withLock {
         val config = activeConfig ?: return@withLock
+        DebugLog.log("stream: manual reconnect")
         stopLocked()
         connectionJob = scope.launch { supervise(config) }
     }
@@ -112,6 +118,7 @@ class OpenCodeStreamClient @Inject constructor(
                     healthy = true
                     attempt = 0
                     _status.value = StreamStatus.Connected
+                    DebugLog.log("stream: connected")
                 }
             }
             try {
@@ -122,12 +129,15 @@ class OpenCodeStreamClient @Inject constructor(
                     }
                     .collect()
                 // Normal completion == the server closed our stream.
+                DebugLog.log("stream: server closed the event stream")
                 _status.value = StreamStatus.Error(OpenCodeError.Network(OpenCodeError.NetworkKind.Closed))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
                 if (!currentCoroutineContext().isActive) throw cancelled()
-                _status.value = StreamStatus.Error(failure.toOpenCodeError())
+                val typed = failure.toOpenCodeError()
+                _status.value = StreamStatus.Error(typed)
+                DebugLog.log("stream: dropped (${typed.kindName()})")
             }
 
             // Compute the sleep for the *current* ladder rung first so the
@@ -135,12 +145,25 @@ class OpenCodeStreamClient @Inject constructor(
             // only while unhealthy.
             val waitMillis = computeBackoffDelay(attempt, jitter())
             if (!healthy) attempt++
+            DebugLog.log("stream: retry in ${waitMillis}ms (attempt ${attempt})")
             delay(waitMillis)
         }
     }
 
     private fun cancelled(): CancellationException =
         CancellationException("stream supervisor stopped")
+
+    /** Short, leak-free classification label for debug breadcrumbs. */
+    private fun OpenCodeError.kindName(): String = when (this) {
+        OpenCodeError.NoServer -> "no-server"
+        OpenCodeError.AuthRejected -> "auth"
+        is OpenCodeError.Network -> "network:${kind.name.lowercase()}"
+        is OpenCodeError.Http -> "http:$code"
+        is OpenCodeError.EndpointMissing -> "endpoint-missing"
+        is OpenCodeError.InvalidInput -> "invalid-input"
+        is OpenCodeError.ServerNarrative -> "server"
+        is OpenCodeError.Unexpected -> "unexpected"
+    }
 
     companion object {
         /** Enough headroom for bursty token streams before backpressure kicks in. */
