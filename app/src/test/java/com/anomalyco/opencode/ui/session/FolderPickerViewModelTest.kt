@@ -10,7 +10,9 @@ import com.anomalyco.opencode.domain.model.FileNode
 import com.anomalyco.opencode.domain.model.ServerPath
 import com.anomalyco.opencode.domain.repository.FileRepository
 import com.anomalyco.opencode.util.MainDispatcherRule
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -22,7 +24,7 @@ import org.junit.Test
 /** Repository double recording every browsed path (existing fake pattern). */
 private class FakeFolderRepository : FileRepository {
     val calls = mutableListOf<String>()
-    var listing: (String) -> Result<FileListing> = { Result.success(FileListing()) }
+    var listing: suspend (String) -> Result<FileListing> = { Result.success(FileListing()) }
 
     override suspend fun listDirectory(path: String): Result<FileListing> {
         calls += path
@@ -44,8 +46,11 @@ class FolderPickerViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private fun dir(path: String, name: String = path.substringAfterLast('\\')) =
-        FileNode(path = path, name = name, isDirectory = true)
+    private fun dir(
+        path: String,
+        name: String = path.substringAfterLast('\\'),
+        absolute: String = "",
+    ) = FileNode(path = path, name = name, isDirectory = true, absolute = absolute)
 
     private fun file(path: String, name: String = path.substringAfterLast('\\')) =
         FileNode(path = path, name = name, isDirectory = false)
@@ -197,5 +202,101 @@ class FolderPickerViewModelTest {
         advanceUntilIdle()
 
         assertTrue(vm.uiState.value.listingTruncated)
+    }
+
+    // ---- W.3: absolute-path resolution --------------------------------------
+    @Test
+    fun `selection prefers the server-provided absolute path`() = runTest {
+        val fake = FakeFolderRepository().apply {
+            listing = { path ->
+                if (ServerPath.isRoot(path)) {
+                    Result.success(FileListing(listOf(dir("Desktop", "Desktop", absolute = "C:\\Users\\zuley\\Desktop"))))
+                } else {
+                    Result.success(FileListing(listOf(dir("Desktop\\X", "X", absolute = "C:\\Users\\zuley\\Desktop\\X"))))
+                }
+            }
+        }
+        val vm = viewModelWith(fake)
+        advanceUntilIdle()
+        // The root's own anchor is the parent of its child's absolute path.
+        assertEquals("C:\\Users\\zuley", vm.uiState.value.currentAbsolute)
+
+        vm.enterFolder(dir("Desktop", "Desktop", absolute = "C:\\Users\\zuley\\Desktop"))
+        advanceUntilIdle()
+        assertEquals("C:\\Users\\zuley\\Desktop", vm.uiState.value.currentAbsolute)
+        assertEquals("C:\\Users\\zuley\\Desktop", vm.selectCurrentFolder())
+
+        assertEquals(
+            "C:\\Users\\zuley\\Desktop\\X",
+            vm.selectFolder(dir("Desktop\\X", "X", absolute = "C:\\Users\\zuley\\Desktop\\X")),
+        )
+        assertEquals("C:\\Users\\zuley\\Desktop\\X", vm.uiState.value.selectedFolder)
+    }
+
+    @Test
+    fun `selection falls back to the relative path when no absolute anchor exists`() = runTest {
+        val fake = FakeFolderRepository().apply {
+            listing = { path ->
+                if (ServerPath.isRoot(path)) {
+                    Result.success(FileListing(listOf(dir("Desktop", "Desktop", absolute = "C:\\Users\\zuley\\Desktop"))))
+                } else {
+                    Result.success(FileListing()) // childless: nothing to derive from
+                }
+            }
+        }
+        val vm = viewModelWith(fake)
+        advanceUntilIdle()
+
+        vm.enterFolder(dir("Desktop", "Desktop", absolute = "C:\\Users\\zuley\\Desktop"))
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.currentAbsolute)
+        assertEquals("Desktop", vm.selectCurrentFolder())
+    }
+
+    @Test
+    fun `goUp re-derives the anchor for the parent level`() = runTest {
+        val fake = FakeFolderRepository().apply {
+            listing = { path ->
+                if (ServerPath.isRoot(path)) {
+                    Result.success(FileListing(listOf(dir("Desktop", "Desktop", absolute = "C:\\Users\\zuley\\Desktop"))))
+                } else {
+                    Result.success(FileListing())
+                }
+            }
+        }
+        val vm = viewModelWith(fake)
+        advanceUntilIdle()
+
+        vm.enterFolder(dir("Desktop", "Desktop", absolute = "C:\\Users\\zuley\\Desktop"))
+        advanceUntilIdle()
+        assertNull(vm.uiState.value.currentAbsolute)
+
+        vm.goUp()
+        advanceUntilIdle()
+
+        assertEquals(ServerPath.ROOT, vm.uiState.value.currentPath)
+        assertEquals("C:\\Users\\zuley", vm.uiState.value.currentAbsolute)
+    }
+
+    @Test
+    fun `listing reports the loading state while the server responds`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val fake = FakeFolderRepository().apply {
+            listing = {
+                gate.await()
+                Result.success(FileListing(listOf(dir("Desktop", "Desktop"))))
+            }
+        }
+        val vm = viewModelWith(fake)
+        runCurrent()
+
+        assertTrue(vm.uiState.value.isLoading)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isLoading)
+        assertEquals(1, vm.uiState.value.directories.size)
     }
 }

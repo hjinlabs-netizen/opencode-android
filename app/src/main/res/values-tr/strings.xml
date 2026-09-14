@@ -138,6 +138,14 @@
         <item quantity="other">İlk %1$d öğe gösteriliyor — bu klasörde daha fazla var.</item>
     </plurals>
 
+    <!-- Calışma klasörü secici (Sprint W.3) -->
+    <string name="picker_browse">Sunucu klasörlerine göz at</string>
+    <string name="picker_choose">Bu klasörü seç</string>
+    <string name="picker_project_root">Proje kökü</string>
+    <string name="picker_empty">Burada klasör yok</string>
+    <string name="picker_cannot_open">Bu klasör açılamıyor</string>
+    <string name="picker_enter_manually">Yolu elle gir</string>
+
     <!-- Diff viewer -->
     <string name="diff_title">Değişiklikler</string>
     <string name="diff_none_title">Değişiklik yok</string>

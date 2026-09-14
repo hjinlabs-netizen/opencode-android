@@ -147,6 +147,14 @@
         <item quantity="other">Showing the first %1$d items — this folder contains more.</item>
     </plurals>
 
+    <!-- Working folder picker (Sprint W.3) -->
+    <string name="picker_browse">Browse server folders</string>
+    <string name="picker_choose">Choose this folder</string>
+    <string name="picker_project_root">Project root</string>
+    <string name="picker_empty">No folders here</string>
+    <string name="picker_cannot_open">Cannot open this folder</string>
+    <string name="picker_enter_manually">Enter path manually</string>
+
     <!-- Diff viewer -->
     <string name="diff_title">Changes</string>
     <string name="diff_none_title">No changes</string>

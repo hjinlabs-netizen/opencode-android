@@ -47,7 +47,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,6 +77,7 @@ import com.anomalyco.opencode.ui.common.stringForError
 fun SessionListScreen(
     onOpenChat: (String) -> Unit,
     onOpenSettings: () -> Unit = {},
+    onOpenDirectoryPicker: () -> Unit = {},
     viewModel: SessionListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -207,6 +211,7 @@ fun SessionListScreen(
             recents = recents,
             isValidating = state.isValidatingDirectory,
             error = state.directoryError,
+            onBrowse = onOpenDirectoryPicker,
             onValueChange = viewModel::onDirectoryInputChange,
             onPickRecent = viewModel::onDirectoryInputChange,
             onCreate = viewModel::createSessionWithDirectory,
@@ -388,28 +393,34 @@ private fun DirectoryDialog(
     recents: List<String>,
     isValidating: Boolean,
     error: OpenCodeError?,
+    onBrowse: () -> Unit,
     onValueChange: (String) -> Unit,
     onPickRecent: (String) -> Unit,
     onCreate: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // Manual entry stays available (W.3 backward compatibility): collapsed
+    // by default, auto-revealed when a value exists (e.g. a picker result
+    // with no absolute anchor, or a previously typed path).
+    var manualExpanded by rememberSaveable { mutableStateOf(value.isNotBlank()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.directory_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = onValueChange,
+                Button(
+                    onClick = onBrowse,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.directory_label)) },
-                    placeholder = { Text(stringResource(R.string.directory_placeholder)) },
-                    singleLine = true,
-                    isError = error != null,
-                    supportingText = error?.let { e ->
-                        { Text(stringForError(e), color = MaterialTheme.colorScheme.error) }
-                    },
-                )
+                    enabled = !isValidating,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.FolderOpen,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.picker_browse))
+                }
                 if (recents.isNotEmpty()) {
                     Text(
                         text = stringResource(R.string.directory_recent),
@@ -433,6 +444,28 @@ private fun DirectoryDialog(
                                 .padding(horizontal = 8.dp, vertical = 8.dp),
                         )
                     }
+                }
+                if (!manualExpanded && value.isBlank()) {
+                    TextButton(
+                        onClick = { manualExpanded = true },
+                        modifier = Modifier.align(Alignment.Start),
+                    ) {
+                        Text(stringResource(R.string.picker_enter_manually))
+                    }
+                }
+                if (manualExpanded || value.isNotBlank()) {
+                    OutlinedTextField(
+                        value = value,
+                        onValueChange = onValueChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.directory_label)) },
+                        placeholder = { Text(stringResource(R.string.directory_placeholder)) },
+                        singleLine = true,
+                        isError = error != null,
+                        supportingText = error?.let { e ->
+                            { Text(stringForError(e), color = MaterialTheme.colorScheme.error) }
+                        },
+                    )
                 }
             }
         },

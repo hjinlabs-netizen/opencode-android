@@ -21,6 +21,7 @@ data class FileNodeDto(
     val isDirectory: Boolean? = null,
     val directory: Boolean? = null,
     val size: Long? = null,
+    val absolute: String? = null,
     val children: List<FileNodeDto>? = null,
     val entries: List<FileNodeDto>? = null,
 ) {
@@ -35,6 +36,7 @@ data class FileNodeDto(
             name = name.ifBlank { full.substringAfterLast('/') },
             isDirectory = isDir,
             size = size ?: 0L,
+            absolute = absolute.orEmpty(),
             children = (children ?: entries).orEmpty().map { it.toDomain(full) },
         )
     }

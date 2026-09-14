@@ -13,7 +13,9 @@ import com.anomalyco.opencode.ui.connection.ConnectionScreen
 import com.anomalyco.opencode.ui.files.DiffScreen
 import com.anomalyco.opencode.ui.files.FileExplorerScreen
 import com.anomalyco.opencode.ui.files.FileExplorerViewModel
+import com.anomalyco.opencode.ui.session.FolderPickerScreen
 import com.anomalyco.opencode.ui.session.SessionListScreen
+import com.anomalyco.opencode.ui.session.SessionListViewModel
 import com.anomalyco.opencode.ui.settings.SettingsScreen
 
 /**
@@ -29,6 +31,9 @@ object Routes {
     const val FILES = "files"
     const val DIFF = "diff"
     const val SETTINGS = "settings"
+
+    /** Server-side working-folder browser (W.3); always opens at the project root. */
+    const val DIRECTORY_PICKER = "directoryPicker"
 
     /** Type-safe route builder for the chat destination. */
     fun chat(sessionId: String) = "chat/$sessionId"
@@ -70,6 +75,24 @@ fun OpenCodeNavGraph(
                 },
                 onOpenSettings = {
                     navController.navigate(Routes.SETTINGS)
+                },
+                onOpenDirectoryPicker = {
+                    navController.navigate(Routes.DIRECTORY_PICKER)
+                },
+            )
+        }
+
+        composable(Routes.DIRECTORY_PICKER) {
+            FolderPickerScreen(
+                onBack = { navController.popBackStack() },
+                // Hand the picked directory to the session-list entry we
+                // return to, via its SavedStateHandle (PICKED_FILE_KEY
+                // architecture).
+                onPick = { directory ->
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set(SessionListViewModel.PICKED_DIRECTORY_KEY, directory)
+                    navController.popBackStack()
                 },
             )
         }

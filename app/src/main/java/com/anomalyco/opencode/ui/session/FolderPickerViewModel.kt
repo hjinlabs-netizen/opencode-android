@@ -28,6 +28,12 @@ import javax.inject.Inject
 data class FolderPickerUiState(
     /** Directory currently browsed; [ServerPath.ROOT] is the project root. */
     val currentPath: String = ServerPath.ROOT,
+    /**
+     * Server-provided absolute path of [currentPath] when derivable (the
+     * parent of any child entry's `absolute`, W.0 field); `null` on builds
+     * or empty listings where the server gives no absolute anchor.
+     */
+    val currentAbsolute: String? = null,
     /** Child directories only - files are never selectable (W.0/W.2 rule). */
     val directories: List<FileNode> = emptyList(),
     /** Ancestor chain root-first, always starting with the project root. */
@@ -35,7 +41,11 @@ data class FolderPickerUiState(
     val isLoading: Boolean = false,
     /** True when the server held more entries than the M.4 cap kept. */
     val listingTruncated: Boolean = false,
-    /** Confirmed pick, or `null` while nothing is selected yet. */
+    /**
+     * Confirmed pick: the server-provided absolute path when available,
+     * the relative path otherwise (W.0 fallback rule). `null` while
+     * nothing is selected.
+     */
     val selectedFolder: String? = null,
     /** Typed failure of the last listing attempt; rendered localized by W.3. */
     val error: OpenCodeError? = null,
@@ -86,14 +96,27 @@ class FolderPickerViewModel @Inject constructor(
         load(ServerPath.normalize(path))
     }
 
-    /** Confirm the currently browsed directory as the working folder pick. */
-    fun selectCurrentFolder() {
-        _uiState.update { it.copy(selectedFolder = it.currentPath) }
+    /**
+     * Confirm the currently browsed directory as the working folder pick.
+     * @return the resolved selection (absolute when the server anchored it,
+     * relative otherwise) for the caller to hand back through navigation.
+     */
+    fun selectCurrentFolder(): String? {
+        val current = _uiState.value
+        val resolved = current.currentAbsolute ?: current.currentPath
+        _uiState.update { it.copy(selectedFolder = resolved) }
+        return resolved
     }
 
-    /** Confirm a child directory as the pick without descending first. */
-    fun selectFolder(node: FileNode) {
-        _uiState.update { it.copy(selectedFolder = ServerPath.normalize(node.path)) }
+    /**
+     * Confirm a child directory as the pick without descending first.
+     * @return the resolved selection (entry absolute preferred, normalized
+     * relative fallback).
+     */
+    fun selectFolder(node: FileNode): String? {
+        val resolved = node.absolute.ifBlank { ServerPath.normalize(node.path) }
+        _uiState.update { it.copy(selectedFolder = resolved) }
+        return resolved
     }
 
     fun onErrorShown() = _uiState.update { it.copy(error = null) }
@@ -112,6 +135,7 @@ class FolderPickerViewModel @Inject constructor(
                 .onSuccess { listing ->
                     _uiState.update {
                         it.copy(
+                            currentAbsolute = deriveOwnAbsolute(listing.entries),
                             directories = listing.entries
                                 .filter(FileNode::isDirectory)
                                 .sortedBy { node -> node.name.lowercase() },
@@ -126,6 +150,22 @@ class FolderPickerViewModel @Inject constructor(
                     _uiState.update { it.copy(isLoading = false, error = error.toDisplayError()) }
                 }
         }
+    }
+
+    /**
+     * The listed directory's own absolute path is the parent of any child's
+     * server-provided `absolute` (W.0). `null` when no child anchors it.
+     */
+    private fun deriveOwnAbsolute(entries: List<FileNode>): String? =
+        entries.asSequence()
+            .map(FileNode::absolute)
+            .firstOrNull { it.isNotBlank() }
+            ?.let { parentOfAbsolute(it) }
+
+    private fun parentOfAbsolute(absolute: String): String? {
+        val trimmed = absolute.trimEnd('\\', '/')
+        val index = maxOf(trimmed.lastIndexOf('\\'), trimmed.lastIndexOf('/'))
+        return if (index <= 0) null else trimmed.substring(0, index)
     }
 
     /** Root-first ancestor chain for [path], always containing the root. */

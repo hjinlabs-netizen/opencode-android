@@ -18,4 +18,19 @@ class TruncationStringsTest {
             assertTrue("$name missing from values-tr", LocaleResourceStrings.hasEntry("values-tr", name))
         }
     }
+
+    @Test
+    fun `folder picker strings exist in both locales`() {
+        listOf(
+            "picker_browse",
+            "picker_choose",
+            "picker_project_root",
+            "picker_empty",
+            "picker_cannot_open",
+            "picker_enter_manually",
+        ).forEach { name ->
+            assertTrue("$name missing from values/strings.xml", LocaleResourceStrings.hasEntry("values", name))
+            assertTrue("$name missing from values-tr", LocaleResourceStrings.hasEntry("values-tr", name))
+        }
+    }
 }

@@ -12,6 +12,13 @@ data class FileNode(
     val isDirectory: Boolean,
     val size: Long = 0L,
     val children: List<FileNode> = emptyList(),
+    /**
+     * Server-reported absolute filesystem path of this entry (W.0: present
+     * on v1.18.31 as the `absolute` JSON field, e.g.
+     * `C:\Users\you\Desktop\Project`). Empty when the server build omits
+     * it - consumers must fall back to the relative [path].
+     */
+    val absolute: String = "",
 ) {
     val extension: String
         get() = if (isDirectory) "" else name.substringAfterLast('.', "")
