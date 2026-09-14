@@ -30,15 +30,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.anomalyco.opencode.R
 import com.anomalyco.opencode.domain.model.DiffLineKind
 import com.anomalyco.opencode.domain.model.DiffStatus
 import com.anomalyco.opencode.domain.model.FileDiff
 import com.anomalyco.opencode.ui.theme.Danger
 import com.anomalyco.opencode.ui.theme.Success
+import com.anomalyco.opencode.ui.theme.Warning
 
 /**
  * One changed file inside the diff viewer: a header row (status icon, path,
@@ -113,6 +116,16 @@ fun DiffFileCard(
             AnimatedVisibility(visible = expanded) {
                 Column {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline, thickness = 0.5.dp)
+                    if (diff.truncated) {
+                        // Sprint M.3: honest notice that the patch was cut at
+                        // the memory limit BEFORE parsing - partial view.
+                        Text(
+                            text = stringResource(R.string.diff_truncated),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Warning,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        )
+                    }
                     diff.hunks.forEach { hunk ->
                         Text(
                             text = hunk.header,

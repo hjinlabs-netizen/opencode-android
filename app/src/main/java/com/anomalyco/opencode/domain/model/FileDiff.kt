@@ -11,6 +11,13 @@ data class FileDiff(
     val hunks: List<DiffHunk> = emptyList(),
     val additions: Int = 0,
     val deletions: Int = 0,
+    /**
+     * True when the raw patch exceeded the memory limit and was cut BEFORE
+     * parsing (Sprint M.3): the shown hunks are the leading part of the
+     * diff, and the UI must mark it as incomplete. Default false preserves
+     * every existing construction site.
+     */
+    val truncated: Boolean = false,
 ) {
     val path: String get() = newPath.ifBlank { oldPath }
 }

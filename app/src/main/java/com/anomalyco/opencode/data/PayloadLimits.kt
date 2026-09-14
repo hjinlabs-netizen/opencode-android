@@ -20,6 +20,13 @@ object PayloadLimits {
     /** File preview text held by the explorer (`FileContent.content`). */
     const val MAX_PREVIEW_CHARS = 512 * 1024
 
+    /**
+     * Raw unified-diff patch text handed to the parser (Sprint M.3): cutting
+     * BEFORE parsing keeps the line-object explosion bounded; the viewer
+     * shows the leading part with a localized "incomplete" notice.
+     */
+    const val MAX_PATCH_CHARS = 1024 * 1024
+
     /** Live chat transcript held by `ChatViewModel` (newest kept). */
     const val MAX_TRANSCRIPT_MESSAGES = 500
 
@@ -67,4 +74,6 @@ object PayloadLimits {
     fun output(raw: String): Capped = cap(raw, MAX_OUTPUT_CHARS)
 
     fun preview(raw: String): Capped = cap(raw, MAX_PREVIEW_CHARS)
+
+    fun patch(raw: String): Capped = cap(raw, MAX_PATCH_CHARS)
 }

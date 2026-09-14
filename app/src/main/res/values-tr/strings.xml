@@ -193,4 +193,5 @@
          boolean bayrak ayarlar; tüm metin burada bulunur. -->
     <string name="content_truncated">İçerik bellek sınırında kısaltıldı.</string>
     <string name="preview_truncated">Dosya önizlemesi bellek sınırında kısaltıldı.</string>
+    <string name="diff_truncated">Fark çok büyük — ilk bölüm gösteriliyor.</string>
 </resources>

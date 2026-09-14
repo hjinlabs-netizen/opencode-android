@@ -87,6 +87,17 @@
 > nightly full + dispatch, report artifacts) · **P0-6 CLOSED** pending the
 > first CI execution (CI-first validation approved; local gate was
 > `assembleDebugAndroidTest`, which packages the 419 KB device suite).
+> **Sprint M (device-validation follow-ups):** ✅ L.1/L.2 debug-only sanitized
+> HTTP logging + SSE breadcrumbs (release: zero network logging) · ✅ M.1
+> `ResponseSizeGuard` bounded reads at the `OpenCodeApi` choke point
+> (4/16/1 MB budgets, Content-Length fast path, typed
+> `OpenCodeError.ResponseTooLarge`, SSE exempt by structure + real-stream
+> test) · ✅ M.2 error bodies capped at 4 KB with remainder cancelled ·
+> ✅ M.3 diff patch text capped at 1 MB BEFORE parsing, `FileDiff.truncated`
+> flag + localized `diff_truncated` notice (partial view, never a failed
+> screen); also fixed the pre-existing double-read dead recovery paths in
+> `health()`/`sendPrompt()`. 306 tests green, lint 0/0, R8 1.83 MB.
+> Remaining: M.4 listing cap, M.5 history part caps, Phase W picker spike.
 > **Sprint D (hardening):** ✅ `lintDebug` gate (0 errors, 0 warnings; product-decision
 > suppressions documented in `app/build.gradle.kts`) · ✅ GitHub Actions CI
 > (`.github/workflows/android.yml`: unit tests, lint, debug+release assemble, artifact

@@ -92,10 +92,17 @@ data class FileDiffDto(
 ) {
     val targetPath: String get() = file ?: path ?: name ?: ""
 
-    /** Parses the embedded patch text (may be blank for metadata-only rows). */
+    /**
+     * Parses the embedded patch text (may be blank for metadata-only rows).
+     * Sprint M.3: the raw patch is capped at [PayloadLimits.MAX_PATCH_CHARS]
+     * BEFORE parsing — the (line-object heavy) parser only ever sees bounded
+     * input; an over-budget patch yields the leading hunks plus the
+     * [FileDiff.truncated] flag instead of failing the whole diff view.
+     */
     fun toDomain(): FileDiff {
         val patchText = patch ?: diff
-        val parsed = patchText?.let { UnifiedDiffParser.parseSingle(it) }
+        val capped = patchText?.let { PayloadLimits.patch(it) }
+        val parsed = capped?.let { UnifiedDiffParser.parseSingle(it.text) }
         val path = targetPath.ifBlank { parsed?.path.orEmpty() }
         return FileDiff(
             oldPath = parsed?.oldPath?.ifBlank { path } ?: path,
@@ -104,6 +111,7 @@ data class FileDiffDto(
             hunks = parsed?.hunks.orEmpty(),
             additions = if (additions > 0) additions else parsed?.additions ?: 0,
             deletions = if (deletions > 0) deletions else parsed?.deletions ?: 0,
+            truncated = capped?.truncated ?: false,
         )
     }
 
@@ -125,7 +133,21 @@ data class DiffTextDto(
     val patch: String = "",
     val files: List<FileDiffDto> = emptyList(),
 ) {
-    fun toDomain(): List<FileDiff> =
-        if (files.isNotEmpty()) files.map { it.toDomain() }
-        else UnifiedDiffParser.parse(patch.ifBlank { diff })
+    /**
+     * Sprint M.3: multi-file wrapper text is capped BEFORE parsing; when cut,
+     * the LAST parsed row carries the truncated flag (it owns the cut hunk)
+     * while earlier rows remain complete.
+     */
+    fun toDomain(): List<FileDiff> {
+        if (files.isNotEmpty()) return files.map { it.toDomain() }
+        val capped = PayloadLimits.patch(patch.ifBlank { diff })
+        val rows = UnifiedDiffParser.parse(capped.text)
+        return if (capped.truncated && rows.isNotEmpty()) {
+            rows.mapIndexed { index, row ->
+                if (index == rows.lastIndex) row.copy(truncated = true) else row
+            }
+        } else {
+            rows
+        }
+    }
 }

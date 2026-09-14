@@ -202,4 +202,5 @@
          sets boolean flags; all prose lives here. -->
     <string name="content_truncated">Content truncated at the memory limit.</string>
     <string name="preview_truncated">File preview truncated at the memory limit.</string>
+    <string name="diff_truncated">Diff too large — showing the first part.</string>
 </resources>
