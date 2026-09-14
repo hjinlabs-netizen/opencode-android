@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.data.remote
 
+import com.anomalyco.opencode.data.PayloadLimits
 import com.anomalyco.opencode.data.remote.dto.ConfigDto
 import com.anomalyco.opencode.data.remote.dto.ConfigPatchDto
 import com.anomalyco.opencode.data.remote.dto.CreateSessionRequest
@@ -13,7 +14,6 @@ import com.anomalyco.opencode.data.remote.dto.SendMessageRequest
 import com.anomalyco.opencode.data.remote.dto.SessionDto
 import com.anomalyco.opencode.domain.model.HealthInfo
 import io.ktor.client.HttpClient
-import io.ktor.client.call.body
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.delete
@@ -23,11 +23,13 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.contentLength
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -61,29 +63,33 @@ class OpenCodeApi @Inject constructor(
      */
     suspend fun health(baseUrl: String, token: String): HealthInfo {
         val response = authorizedGet(baseUrl, token, HEALTH_PATH)
-        // Body may be empty; fall back gracefully instead of crashing the parser.
-        val text = response.bodyAsText().trim()
+        // Body may be empty; fall back gracefully instead of crashing the
+        // parser. Sprint M.1: bounded read (1 MB budget) decoded from the
+        // SAME text the probe already consumed — the old second read of an
+        // already-consumed channel made the typed decode path unreachable.
+        val text = response.boundedBodyText(PayloadLimits.MAX_RESPONSE_SMALL_BYTES).trim()
         if (text.isEmpty() || text == "{}") return HealthInfo.empty()
-        return runCatching { response.body<HealthInfo>() }.getOrElse { HealthInfo.empty() }
+        return runCatching { json.decodeFromString<HealthInfo>(text) }
+            .getOrDefault(HealthInfo.empty())
     }
 
     /** `GET /session` — list all sessions known to the server. */
     suspend fun listSessions(baseUrl: String, token: String): List<SessionDto> =
-        authorizedGet(baseUrl, token, SESSIONS_PATH).body()
+        authorizedGet(baseUrl, token, SESSIONS_PATH).boundedBody(json)
 
     /** `POST /session` — create a new session and return its descriptor. */
     suspend fun createSession(
         baseUrl: String,
         token: String,
         request: CreateSessionRequest,
-    ): SessionDto = authorizedPost(baseUrl, token, SESSIONS_PATH, request).body()
+    ): SessionDto = authorizedPost(baseUrl, token, SESSIONS_PATH, request).boundedBody(json)
 
     /** `GET /session/{id}` — fetch a single session's details. */
     suspend fun getSession(
         baseUrl: String,
         token: String,
         sessionId: String,
-    ): SessionDto = authorizedGet(baseUrl, token, "$SESSIONS_PATH/$sessionId").body()
+    ): SessionDto = authorizedGet(baseUrl, token, "$SESSIONS_PATH/$sessionId").boundedBody(json)
 
     /**
      * `DELETE /session/{id}` — permanently delete a session server-side.
@@ -106,7 +112,7 @@ class OpenCodeApi @Inject constructor(
         baseUrl,
         token,
         "$SESSIONS_PATH/$sessionId/$MESSAGES_SUFFIX",
-    ).body()
+    ).boundedBody(json)
 
     /**
      * `POST /session/{id}/message` — send a prompt and return the created user
@@ -136,8 +142,12 @@ class OpenCodeApi @Inject constructor(
             "$SESSIONS_PATH/$sessionId/$MESSAGES_SUFFIX",
             request,
         ) { timeout(infiniteTimeouts) }
-        return runCatching { response.body<MessageDto>() }
-            .recoverCatching { MessageDto(info = response.body<MessageInfoDto>()) }
+        // Sprint M.1: one bounded read (16 MB message budget); the shape
+        // fallback decodes the SAME text — the old second body<> read of an
+        // already-consumed channel never actually worked.
+        val text = response.boundedBodyText()
+        return runCatching { json.decodeFromString<MessageDto>(text) }
+            .recoverCatching { MessageDto(info = json.decodeFromString<MessageInfoDto>(text)) }
             .getOrElse { MessageDto() }
     }
 
@@ -215,17 +225,17 @@ class OpenCodeApi @Inject constructor(
         if (contentType != null && !contentType.withoutParameters().match(ContentType.Application.Json)) {
             throw UnsupportedResponseException(path, contentType.toString())
         }
-        val text = response.bodyAsText().trim()
+        val text = response.boundedBodyText().trim()
         return if (text.isEmpty()) JsonNull else json.parseToJsonElement(text)
     }
 
     /** `GET /provider` — catalog of supported providers/models. */
     suspend fun getProviders(baseUrl: String, token: String): ProviderListDto =
-        authorizedGet(baseUrl, token, PROVIDER_PATH).body()
+        authorizedGet(baseUrl, token, PROVIDER_PATH).boundedBody(json)
 
     /** `GET /config` — server configuration subset (active model). */
     suspend fun getConfig(baseUrl: String, token: String): ConfigDto =
-        authorizedGet(baseUrl, token, CONFIG_PATH).body()
+        authorizedGet(baseUrl, token, CONFIG_PATH).boundedBody(json)
 
     /** `POST /config` — patch the configuration (model switching). */
     suspend fun updateConfig(
@@ -266,10 +276,31 @@ class OpenCodeApi @Inject constructor(
     private suspend fun validated(block: suspend () -> HttpResponse): HttpResponse {
         val response = block()
         if (!response.status.isSuccess()) {
-            throw OpenCodeHttpException(response.status.value, response.bodyAsText())
+            throw OpenCodeHttpException(response.status.value, response.boundedErrorText())
         }
         return response
     }
+
+    /**
+     * Sprint M.2: error bodies are read BOUNDED (max 4 KB) and the remainder
+     * is discarded, so a pathological server error page can never buffer into
+     * memory. The status code — the part the typed error actually needs — is
+     * always preserved; the snippet keeps its existing 512-char cap in
+     * `ErrorMapping`. If the body cannot be read at all, an empty text keeps
+     * the same behavior the old code had for empty error bodies.
+     */
+    private suspend fun HttpResponse.boundedErrorText(): String = runCatching {
+        val declared = contentLength()
+        val cap = if (declared == null || declared > PayloadLimits.MAX_ERROR_BODY_BYTES) {
+            PayloadLimits.MAX_ERROR_BODY_BYTES
+        } else {
+            declared.coerceAtLeast(0L).toInt()
+        }
+        val channel = bodyAsChannel()
+        val bytes = channel.readUpTo(cap)
+        channel.cancel(null) // drop the rest without buffering it
+        String(bytes, Charsets.UTF_8)
+    }.getOrDefault("")
 
     private fun HttpRequestBuilder.authorize(token: String) {
         if (token.isNotBlank()) {

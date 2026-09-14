@@ -29,6 +29,20 @@ object PayloadLimits {
     /** Per-endpoint probe memoization: tracked servers before LRU eviction. */
     const val MAX_TRACKED_SERVERS = 8
 
+    // ---- HTTP response budgets (Sprint M.1, ResponseSizeGuard) --------------
+
+    /** Budget for ordinary JSON endpoints (sessions, files, diffs, listings). */
+    const val MAX_RESPONSE_DEFAULT_BYTES = 4L * 1024 * 1024
+
+    /** Budget for the message-carrying endpoints (`/session/{id}/message`). */
+    const val MAX_RESPONSE_MESSAGES_BYTES = 16L * 1024 * 1024
+
+    /** Budget for the small metadata endpoints (health, provider, config). */
+    const val MAX_RESPONSE_SMALL_BYTES = 1L * 1024 * 1024
+
+    /** Hard ceiling on buffered HTTP error bodies (Sprint M.2). */
+    const val MAX_ERROR_BODY_BYTES = 4 * 1024
+
     /** Outcome of [cap]: text never exceeds [maxChars], [truncated] marks a cut. */
     data class Capped(val text: String, val truncated: Boolean)
 

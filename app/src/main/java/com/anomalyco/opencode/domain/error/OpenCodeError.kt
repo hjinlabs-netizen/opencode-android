@@ -74,6 +74,14 @@ sealed interface OpenCodeError {
     data class InvalidInput(val reason: InvalidReason) : OpenCodeError
 
     /**
+     * The server answered with a payload above the client's response-size
+     * budget ([maxBytes], enforced by the HTTP-boundary `ResponseSizeGuard`).
+     * Hard failure by design: partial JSON is unparseable, so nothing is
+     * ever shown from a truncated body.
+     */
+    data class ResponseTooLarge(val maxBytes: Long) : OpenCodeError
+
+    /**
      * Free-form text authored by the SERVER (e.g. `session.error` payloads).
      * Deliberately rendered as-is: it cannot be localized and is the most
      * useful diagnostic the user can get for agent-side failures.

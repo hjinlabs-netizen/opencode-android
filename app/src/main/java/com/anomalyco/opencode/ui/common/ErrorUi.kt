@@ -31,6 +31,7 @@ fun OpenCodeError.messageRes(): Int = when (this) {
         else -> R.string.error_http
     }
     is OpenCodeError.EndpointMissing -> R.string.error_endpoint_missing
+    is OpenCodeError.ResponseTooLarge -> R.string.error_response_too_large
     is OpenCodeError.InvalidInput -> when (reason) {
         OpenCodeError.InvalidReason.EmptyUrl -> R.string.error_invalid_url_empty
         OpenCodeError.InvalidReason.UrlScheme -> R.string.error_invalid_url_scheme
@@ -45,6 +46,7 @@ fun OpenCodeError.messageRes(): Int = when (this) {
 fun OpenCodeError.messageArgs(): List<Any> = when (this) {
     is OpenCodeError.Http -> listOf(code)
     is OpenCodeError.EndpointMissing -> listOf(path, observedContentType ?: "-")
+    is OpenCodeError.ResponseTooLarge -> listOf((maxBytes / (1024 * 1024)).toInt())
     else -> emptyList()
 }
 

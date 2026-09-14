@@ -91,6 +91,7 @@ class ProseGuardTest {
                 val rel = it.relativeTo(root).invariantSeparatorsPath
                 rel.startsWith("domain/error/") ||
                     rel == "data/remote/OpenCodeApi.kt" ||
+                    rel == "data/remote/ResponseSizeGuard.kt" ||
                     rel.startsWith("data/remote/stream/")
             }
             .flatMap { file ->

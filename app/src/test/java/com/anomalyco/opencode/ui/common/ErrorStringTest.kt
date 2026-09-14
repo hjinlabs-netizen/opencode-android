@@ -29,6 +29,7 @@ class ErrorStringTest {
         add(OpenCodeError.Http(429, null)) // dedicated rate-limit text
         add(OpenCodeError.EndpointMissing("/fs/list", "text/html"))
         add(OpenCodeError.EndpointMissing("/fs/list", null))
+        add(OpenCodeError.ResponseTooLarge(4L * 1024 * 1024))
         OpenCodeError.InvalidReason.entries.forEach { add(OpenCodeError.InvalidInput(it)) }
         add(OpenCodeError.Unexpected(RuntimeException("debug only")))
     }
@@ -93,6 +94,10 @@ class ErrorStringTest {
         assertEquals(
             listOf<Any>("/fs/list", "-"),
             OpenCodeError.EndpointMissing("/fs/list", null).messageArgs(),
+        )
+        assertEquals(
+            listOf<Any>(4),
+            OpenCodeError.ResponseTooLarge(4L * 1024 * 1024).messageArgs(),
         )
         assertTrue(OpenCodeError.NoServer.messageArgs().isEmpty())
     }

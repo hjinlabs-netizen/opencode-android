@@ -31,6 +31,7 @@ internal fun Throwable.toOpenCodeError(): OpenCodeError = when (this) {
             OpenCodeError.Http(code, bodyText.take(MAX_BODY_SNIPPET).ifBlank { null })
         }
     is UnsupportedResponseException -> OpenCodeError.EndpointMissing(path, contentType)
+    is ResponseTooLargeException -> OpenCodeError.ResponseTooLarge(maxBytes)
     // Generic transport-level deaths (mid-stream socket resets, unexpected
     // end-of-stream) are CONNECT failures. Placed AFTER the specific
     // IOException subclasses above, which keep their own kinds.

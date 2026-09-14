@@ -183,6 +183,7 @@
     <string name="error_http_rate_limited">Sunucu çok fazla istek aldı — biraz bekleyip tekrar deneyin.</string>
     <string name="error_http">Sunucu hatası (HTTP %1$d) — OpenCode servisini kontrol edin.</string>
     <string name="error_endpoint_missing">Bu sunucu istenen veriyi sağlamıyor (uç nokta %1$s, yanıt %2$s).</string>
+    <string name="error_response_too_large">Sunucu yanıtı çok büyük (sınır %1$d MB).</string>
     <string name="error_invalid_url_empty">Sunucu adresi boş olamaz.</string>
     <string name="error_invalid_url_scheme">Adres http:// veya https:// ile başlamalıdır.</string>
     <string name="error_invalid_directory">Klasör doğrulanamadı — sunucu erişilebilir mi?</string>

@@ -28,6 +28,7 @@ private fun OpenCodeError.debugHint(): String = when (this) {
     is OpenCodeError.Http -> "server returned HTTP $code"
     is OpenCodeError.EndpointMissing -> "endpoint unavailable: $path"
     is OpenCodeError.InvalidInput -> "invalid input: $reason"
+    is OpenCodeError.ResponseTooLarge -> "response exceeds $maxBytes bytes"
     is OpenCodeError.ServerNarrative -> "server said: ${text.take(200)}"
     is OpenCodeError.Unexpected -> cause?.message ?: "unexpected error"
 }

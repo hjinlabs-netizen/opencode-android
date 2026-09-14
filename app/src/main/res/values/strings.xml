@@ -192,6 +192,7 @@
     <string name="error_http_rate_limited">The server received too many requests — wait a moment and try again.</string>
     <string name="error_http">Server error (HTTP %1$d) — check the OpenCode service.</string>
     <string name="error_endpoint_missing">This server does not provide the requested data (endpoint %1$s, response %2$s).</string>
+    <string name="error_response_too_large">The server response is too large (limit %1$d MB).</string>
     <string name="error_invalid_url_empty">The server address cannot be empty.</string>
     <string name="error_invalid_url_scheme">The address must start with http:// or https://.</string>
     <string name="error_invalid_directory">Could not validate the folder — is the server reachable?</string>

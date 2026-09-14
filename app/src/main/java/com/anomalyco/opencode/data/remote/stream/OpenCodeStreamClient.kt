@@ -160,6 +160,7 @@ class OpenCodeStreamClient @Inject constructor(
         is OpenCodeError.Network -> "network:${kind.name.lowercase()}"
         is OpenCodeError.Http -> "http:$code"
         is OpenCodeError.EndpointMissing -> "endpoint-missing"
+        is OpenCodeError.ResponseTooLarge -> "response-too-large"
         is OpenCodeError.InvalidInput -> "invalid-input"
         is OpenCodeError.ServerNarrative -> "server"
         is OpenCodeError.Unexpected -> "unexpected"
