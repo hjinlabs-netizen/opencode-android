@@ -109,6 +109,19 @@ class MessageAssemblerTest {
     }
 
     @Test
+    fun `streaming accumulation is NOT capped - the part limit guards history retention only`() {
+        // A single delta larger than MAX_PART_CHARS must pass through the
+        // live assembler untouched: generation is never cut mid-stream.
+        val big = "s".repeat(com.anomalyco.opencode.data.PayloadLimits.MAX_PART_CHARS + 1000)
+
+        val messages = MessageAssembler.apply(emptyList(), session, StreamEvent.TextDelta(session, "p1", big))
+
+        val part = messages.single().parts.single() as MessagePart.TextPart
+        assertEquals(big.length, part.content.length)
+        org.junit.Assert.assertFalse(part.contentTruncated)
+    }
+
+    @Test
     fun `tool-called truncation flag lands on the live part`() {
         val event = StreamEvent.ToolCalled(session, "c1", "edit", "x".repeat(64), argsTruncated = true)
         val parts = MessageAssembler.apply(emptyList(), session, event).single().parts

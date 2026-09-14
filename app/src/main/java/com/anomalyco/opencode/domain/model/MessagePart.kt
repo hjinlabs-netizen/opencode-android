@@ -24,6 +24,8 @@ sealed interface MessagePart {
         val content: String = "",
         /** Server part id; stream deltas are merged by this key. */
         val id: String = "",
+        /** True when history [content] was cut at the memory limit (M.5). */
+        val contentTruncated: Boolean = false,
     ) : MessagePart
 
     /** Model chain-of-thought ("thinking") streamed for a message. */
@@ -33,6 +35,8 @@ sealed interface MessagePart {
         val thinking: String = "",
         val isFinished: Boolean = false,
         val id: String = "",
+        /** True when history [thinking] was cut at the memory limit (M.5). */
+        val thinkingTruncated: Boolean = false,
     ) : MessagePart
 
     /** A non-shell tool invocation (edit, write, webfetch, ...). */

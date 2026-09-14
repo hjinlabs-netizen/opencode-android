@@ -85,7 +85,13 @@ fun TextPartCard(
     onCodeCopied: (String) -> Unit = {},
 ) {
     if (part.content.isEmpty()) return
-    MarkdownText(text = part.content, modifier = modifier.fillMaxWidth(), onCodeCopied = onCodeCopied)
+    Column(modifier = modifier.fillMaxWidth()) {
+        MarkdownText(text = part.content, modifier = Modifier.fillMaxWidth(), onCodeCopied = onCodeCopied)
+        if (part.contentTruncated) {
+            // Sprint M.5: history text was cut at the memory limit.
+            TruncatedChip()
+        }
+    }
 }
 
 // ---- Reasoning (collapsible "thinking") ------------------------------------
@@ -130,12 +136,18 @@ fun ReasoningPartCard(part: MessagePart.ReasoningPart, modifier: Modifier = Modi
             }
         }
         AnimatedVisibility(visible = expanded, enter = expandVertically(), exit = shrinkVertically()) {
-            Text(
-                text = part.thinking,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp),
-            )
+            Column {
+                Text(
+                    text = part.thinking,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                if (part.thinkingTruncated) {
+                    // Sprint M.5: history thinking was cut at the memory limit.
+                    TruncatedChip()
+                }
+            }
         }
     }
 }

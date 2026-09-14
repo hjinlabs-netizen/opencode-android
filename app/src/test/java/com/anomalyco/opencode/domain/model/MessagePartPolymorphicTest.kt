@@ -73,6 +73,21 @@ class MessagePartPolymorphicTest {
     }
 
     @Test
+    fun `M5 truncation flags round-trip and legacy payloads default to false`() {
+        val flagged = MessagePart.TextPart("cut", "p1", contentTruncated = true)
+        val encoded = json.encodeToString(MessagePart.TextPart.serializer(), flagged)
+        assertEquals(flagged, json.decodeFromString(MessagePart.TextPart.serializer(), encoded))
+
+        // A payload written BEFORE the flag existed decodes cleanly.
+        val legacy = json.decodeFromString(
+            MessagePart.ReasoningPart.serializer(),
+            """{"thinking":"old wire shape","isFinished":true,"id":"p2"}""",
+        )
+        assertEquals(false, legacy.thinkingTruncated)
+        assertEquals("old wire shape", legacy.thinking)
+    }
+
+    @Test
     fun `tool and step status enums map wire vocabulary`() {
         assertEquals(ToolStatus.COMPLETED, ToolStatus.fromWire("completed"))
         assertEquals(ToolStatus.COMPLETED, ToolStatus.fromWire("success"))

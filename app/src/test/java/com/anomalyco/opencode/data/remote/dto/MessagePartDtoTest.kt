@@ -71,4 +71,59 @@ class MessagePartDtoTest {
         assertEquals("hi", part.output)
         assertFalse(part.outputTruncated)
     }
+
+    // ---- Sprint M.5: text / reasoning history caps -------------------------
+    @Test
+    fun `small assistant text passes through unflagged`() {
+        val raw = """{"type":"text","id":"p1","text":"short answer"}"""
+        val part = part(raw) as MessagePart.TextPart
+        assertEquals("short answer", part.content)
+        assertFalse(part.contentTruncated)
+    }
+
+    @Test
+    fun `assistant text exactly at the cap is accepted unflagged`() {
+        val exact = "t".repeat(PayloadLimits.MAX_PART_CHARS)
+        val raw = """{"type":"text","id":"p1","text":"$exact"}"""
+
+        val part = part(raw) as MessagePart.TextPart
+
+        assertEquals(PayloadLimits.MAX_PART_CHARS, part.content.length)
+        assertFalse(part.contentTruncated)
+    }
+
+    @Test
+    fun `oversized assistant text is capped before retention and flagged`() {
+        val huge = "t".repeat(PayloadLimits.MAX_PART_CHARS + 1000)
+        val raw = """{"type":"text","id":"p1","text":"$huge"}"""
+
+        val part = part(raw) as MessagePart.TextPart
+
+        assertEquals(PayloadLimits.MAX_PART_CHARS, part.content.length)
+        assertTrue(part.contentTruncated)
+        assertEquals("p1", part.id)
+    }
+
+    @Test
+    fun `oversized reasoning is capped and flagged the same way`() {
+        val huge = "r".repeat(PayloadLimits.MAX_PART_CHARS + 1)
+        val raw = """{"type":"reasoning","id":"p2","thinking":"$huge"}"""
+
+        val part = part(raw) as MessagePart.ReasoningPart
+
+        assertEquals(PayloadLimits.MAX_PART_CHARS, part.thinking.length)
+        assertTrue(part.thinkingTruncated)
+        assertTrue("history parts stay finished", part.isFinished)
+    }
+
+    @Test
+    fun `reasoning falling back to the text field is capped too`() {
+        val huge = "f".repeat(PayloadLimits.MAX_PART_CHARS + 1)
+        val raw = """{"type":"reasoning","id":"p3","text":"$huge"}"""
+
+        val part = part(raw) as MessagePart.ReasoningPart
+
+        assertEquals(PayloadLimits.MAX_PART_CHARS, part.thinking.length)
+        assertTrue(part.thinkingTruncated)
+    }
 }

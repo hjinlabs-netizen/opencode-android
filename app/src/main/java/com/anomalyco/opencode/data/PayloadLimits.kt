@@ -34,6 +34,16 @@ object PayloadLimits {
      */
     const val MAX_LIST_NODES = 1000
 
+    /**
+     * Assistant text/reasoning content retained per message PART by the
+     * chat screen (Sprint M.5): history payloads are capped at the DTO→domain
+     * boundary BEFORE they become long-lived state. The live streaming path
+     * (`MessageAssembler` delta accumulation) is deliberately NOT capped -
+     * generation must stay complete; the end-of-turn history refresh replaces
+     * the live bubble with the capped server truth.
+     */
+    const val MAX_PART_CHARS = 512 * 1024
+
     /** Live chat transcript held by `ChatViewModel` (newest kept). */
     const val MAX_TRANSCRIPT_MESSAGES = 500
 
@@ -83,4 +93,6 @@ object PayloadLimits {
     fun preview(raw: String): Capped = cap(raw, MAX_PREVIEW_CHARS)
 
     fun patch(raw: String): Capped = cap(raw, MAX_PATCH_CHARS)
+
+    fun part(raw: String): Capped = cap(raw, MAX_PART_CHARS)
 }

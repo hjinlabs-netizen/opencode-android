@@ -79,15 +79,33 @@ data class PartDto(
         val metadata: JsonObject? = null,
     )
 
+    /**
+     * History decode boundary (Sprint M.5): text and reasoning payloads are
+     * capped at [PayloadLimits.MAX_PART_CHARS] BEFORE becoming long-lived
+     * domain state, with the typed flag set for the UI notice. Live streaming
+     * does not flow through this function - it accumulates deltas in
+     * `MessageAssembler` and stays uncapped by design.
+     */
     fun toDomain(): MessagePart? = when (type) {
-        "text" -> MessagePart.TextPart(content = text.orEmpty(), id = id)
+        "text" -> {
+            val cappedText = PayloadLimits.part(text.orEmpty())
+            MessagePart.TextPart(
+                content = cappedText.text,
+                id = id,
+                contentTruncated = cappedText.truncated,
+            )
+        }
 
-        "reasoning" -> MessagePart.ReasoningPart(
-            thinking = (thinking ?: text).orEmpty(),
-            // Parts in a completed history payload are finished by definition.
-            isFinished = true,
-            id = id,
-        )
+        "reasoning" -> {
+            val cappedThinking = PayloadLimits.part((thinking ?: text).orEmpty())
+            MessagePart.ReasoningPart(
+                thinking = cappedThinking.text,
+                // Parts in a completed history payload are finished by definition.
+                isFinished = true,
+                id = id,
+                thinkingTruncated = cappedThinking.truncated,
+            )
+        }
 
         "tool" -> {
             val toolName = tool.orEmpty()

@@ -101,7 +101,13 @@
 > materialization (`FileListing(entries, truncated)` at the repository
 > boundary + localized `files_list_truncated` plurals notice in the
 > explorer). 309 tests green, lint 0 issues, R8 1.83 MB.
-> Remaining: M.5 history part caps, Phase W picker spike.
+> ✅ M.5 history text/reasoning parts capped at 512 K chars at the
+> DTO→domain boundary (`TextPart.contentTruncated` /
+> `ReasoningPart.thinkingTruncated` + reused `content_truncated` chip);
+> live streaming accumulation deliberately uncapped (proven by test) —
+> end-of-turn history refresh replaces the live bubble with capped truth.
+> 316 tests green, lint 0 issues, R8 1.83 MB. Phase M complete.
+> Remaining: Phase W picker spike (W.0) then W.1-W.4.
 > **Sprint D (hardening):** ✅ `lintDebug` gate (0 errors, 0 warnings; product-decision
 > suppressions documented in `app/build.gradle.kts`) · ✅ GitHub Actions CI
 > (`.github/workflows/android.yml`: unit tests, lint, debug+release assemble, artifact
