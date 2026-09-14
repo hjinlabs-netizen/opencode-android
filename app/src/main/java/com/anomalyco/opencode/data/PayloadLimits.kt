@@ -27,6 +27,13 @@ object PayloadLimits {
      */
     const val MAX_PATCH_CHARS = 1024 * 1024
 
+    /**
+     * Directory entries materialized as `FileNode` objects per listing
+     * (Sprint M.4): huge folders (node_modules, build outputs) are bounded
+     * BEFORE DTO/domain creation, with a `truncated` flag on the listing.
+     */
+    const val MAX_LIST_NODES = 1000
+
     /** Live chat transcript held by `ChatViewModel` (newest kept). */
     const val MAX_TRANSCRIPT_MESSAGES = 500
 

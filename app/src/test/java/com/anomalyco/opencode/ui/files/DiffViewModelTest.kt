@@ -2,7 +2,7 @@ package com.anomalyco.opencode.ui.files
 
 import com.anomalyco.opencode.domain.model.FileContent
 import com.anomalyco.opencode.domain.model.FileDiff
-import com.anomalyco.opencode.domain.model.FileNode
+import com.anomalyco.opencode.domain.model.FileListing
 import com.anomalyco.opencode.domain.repository.FileRepository
 import com.anomalyco.opencode.util.MainDispatcherRule
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -18,7 +18,7 @@ class DiffViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private class FakeFiles(private val diffs: List<FileDiff>) : FileRepository {
-        override suspend fun listDirectory(path: String) = Result.success(emptyList<FileNode>())
+        override suspend fun listDirectory(path: String) = Result.success(FileListing())
         override suspend fun readFile(path: String) = Result.failure<FileContent>(NotImplementedError())
         override suspend fun diffFile(path: String) = Result.failure<FileDiff>(NotImplementedError())
         override suspend fun workingTreeDiff() = Result.success(diffs)

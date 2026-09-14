@@ -133,6 +133,10 @@
     <string name="files_empty_folder">Boş klasör</string>
     <string name="files_search_hint">Dosyada ara…</string>
     <string name="files_search_clear">Temizle</string>
+    <plurals name="files_list_truncated">
+        <item quantity="one">İlk %1$d öğe gösteriliyor — bu klasörde daha fazla var.</item>
+        <item quantity="other">İlk %1$d öğe gösteriliyor — bu klasörde daha fazla var.</item>
+    </plurals>
 
     <!-- Diff viewer -->
     <string name="diff_title">Değişiklikler</string>

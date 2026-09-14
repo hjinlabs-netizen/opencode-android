@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,8 +54,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anomalyco.opencode.R
+import com.anomalyco.opencode.data.PayloadLimits
 import com.anomalyco.opencode.domain.model.FileNode
 import com.anomalyco.opencode.ui.common.stringForError
+import com.anomalyco.opencode.ui.theme.Warning
 
 /**
  * Project file browser. Tapping a directory descends, a file opens the
@@ -200,6 +203,20 @@ fun FileExplorerScreen(
                             },
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
+                        )
+                    }
+                    if (state.listingTruncated) {
+                        // Sprint M.4: honest notice that the folder holds more
+                        // than the memory cap keeps.
+                        Text(
+                            text = pluralStringResource(
+                                R.plurals.files_list_truncated,
+                                PayloadLimits.MAX_LIST_NODES,
+                                PayloadLimits.MAX_LIST_NODES,
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Warning,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         )
                     }
                     LazyColumn(

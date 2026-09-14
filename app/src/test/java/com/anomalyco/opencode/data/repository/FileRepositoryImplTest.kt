@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.data.repository
 
+import com.anomalyco.opencode.data.PayloadLimits
 import com.anomalyco.opencode.data.remote.OpenCodeApi
 import com.anomalyco.opencode.domain.error.OpenCodeError
 import com.anomalyco.opencode.domain.error.OpenCodeException
@@ -70,8 +71,51 @@ class FileRepositoryImplTest {
                 FileNode("app/a.kt", "a.kt", isDirectory = false, size = 42),
                 FileNode("app/b.kt", "b.kt", isDirectory = false, size = 7),
             ),
-            result.getOrThrow(),
+            result.getOrThrow().entries,
         )
+    }
+
+    // ---- Sprint M.4: directory listing memory cap -----------------------------
+    @Test
+    fun `directory listing is capped at the memory limit and flagged`() = runTest {
+        val rows = (1..1001).joinToString(",") { """{"name":"f$it.kt","type":"file","path":"f$it.kt"}""" }
+        val repo = repository { MockResponse(body = "[$rows]") }
+
+        val listing = repo.listDirectory("big").getOrThrow()
+
+        assertEquals(PayloadLimits.MAX_LIST_NODES, listing.entries.size)
+        assertTrue("more entries existed server-side", listing.truncated)
+        assertEquals("f1.kt", listing.entries.first().name)
+        assertEquals("f1000.kt", listing.entries.last().name) // f1001 never decoded
+    }
+
+    @Test
+    fun `listing exactly at the cap is complete and unflagged`() = runTest {
+        val rows = (1..1000).joinToString(",") { """{"name":"f$it.kt","type":"file"}""" }
+        val repo = repository { MockResponse(body = "[$rows]") }
+
+        val listing = repo.listDirectory("ok").getOrThrow()
+
+        assertEquals(1000, listing.entries.size)
+        assertFalse(listing.truncated)
+    }
+
+    @Test
+    fun `wrapper-shaped listings are capped and flagged too`() = runTest {
+        val children = (1..1200).joinToString(",") { """{"name":"c$it","type":"file"}""" }
+        val repo = repository { request ->
+            when (pathOf(request)) {
+                "/file" -> MockResponse(
+                    body = """{"type":"directory","path":"p","entries":[$children]}""",
+                )
+                else -> html
+            }
+        }
+
+        val listing = repo.listDirectory("p").getOrThrow()
+
+        assertEquals(PayloadLimits.MAX_LIST_NODES, listing.entries.size)
+        assertTrue(listing.truncated)
     }
 
     @Test
@@ -92,7 +136,7 @@ class FileRepositoryImplTest {
                 else -> html
             }
         }
-        val nodes = repo.listDirectory("src").getOrThrow()
+        val nodes = repo.listDirectory("src").getOrThrow().entries
 
         assertEquals(listOf("/fs/list", "/find", "/file/find", "/file"), captured.map(::pathOf))
         assertEquals(listOf(FileNode("src/a.kt", "a.kt", isDirectory = false)), nodes)
@@ -111,7 +155,7 @@ class FileRepositoryImplTest {
                 else -> MockResponse(status = HttpStatusCode.BadRequest)
             }
         }
-        val nodes = repo.listDirectory("").getOrThrow()
+        val nodes = repo.listDirectory("").getOrThrow().entries
 
         assertEquals(listOf("/fs/list", "/find"), captured.map(::pathOf))
         assertEquals(".", captured.last().url.parameters["path"])

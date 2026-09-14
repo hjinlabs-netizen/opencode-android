@@ -25,3 +25,14 @@ data class FileContent(
     /** True when [content] was cut at the preview memory limit at decode. */
     val truncated: Boolean = false,
 )
+
+/**
+ * One directory level plus the honest marker that the server returned MORE
+ * entries than the client keeps (Sprint M.4 memory cap): the listing is
+ * bounded to `PayloadLimits.MAX_LIST_NODES` BEFORE domain objects are
+ * created, and the UI shows a localized "showing first N" notice.
+ */
+data class FileListing(
+    val entries: List<FileNode> = emptyList(),
+    val truncated: Boolean = false,
+)

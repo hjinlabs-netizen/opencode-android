@@ -21,6 +21,8 @@ data class FileExplorerUiState(
     /** Directory currently shown; "" is the server-side project root. */
     val path: String = "",
     val entries: List<FileNode> = emptyList(),
+    /** True when the server held more entries than the memory cap kept (M.4). */
+    val listingTruncated: Boolean = false,
     /** Name filter over [entries]; server-side search is a P3 item. */
     val query: String = "",
     /** Parent chain for the back/breadcrumb affordance. */
@@ -101,9 +103,13 @@ class FileExplorerViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             fileRepository.listDirectory(path)
-                .onSuccess { nodes ->
+                .onSuccess { listing ->
                     _uiState.update {
-                        it.copy(entries = nodes.sortedWithDirectoryFirst(), isLoading = false)
+                        it.copy(
+                            entries = listing.entries.sortedWithDirectoryFirst(),
+                            listingTruncated = listing.truncated,
+                            isLoading = false,
+                        )
                     }
                 }
                 .onFailure { error ->

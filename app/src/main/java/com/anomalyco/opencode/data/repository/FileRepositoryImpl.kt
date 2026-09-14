@@ -18,7 +18,7 @@ import com.anomalyco.opencode.domain.error.OpenCodeException
 import com.anomalyco.opencode.domain.model.DiffStatus
 import com.anomalyco.opencode.domain.model.FileContent
 import com.anomalyco.opencode.domain.model.FileDiff
-import com.anomalyco.opencode.domain.model.FileNode
+import com.anomalyco.opencode.domain.model.FileListing
 import com.anomalyco.opencode.domain.model.ServerConfig
 import com.anomalyco.opencode.domain.repository.ConnectionRepository
 import com.anomalyco.opencode.domain.repository.FileRepository
@@ -77,7 +77,7 @@ class FileRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun listDirectory(path: String): Result<List<FileNode>> = guarded {
+    override suspend fun listDirectory(path: String): Result<FileListing> = guarded {
         val server = connectionRepository.requireActiveServer()
         val element = firstUsableJson(server, LIST_ENDPOINTS, path, OP_LIST)
         decodeNodes(element, path)
@@ -177,23 +177,39 @@ class FileRepositoryImpl @Inject constructor(
 
     // ---- tolerant shape decoding --------------------------------------------
 
-    private fun decodeNodes(element: JsonElement, parentPath: String): List<FileNode> =
+    /**
+     * Sprint M.4: the array branch caps at [PayloadLimits.MAX_LIST_NODES]
+     * BEFORE per-item DTO decoding (the oversized remainder only sets the
+     * flag); the wrapper branch caps before domain mapping. Huge folders
+     * therefore never materialize thousands of FileNode objects.
+     */
+    private fun decodeNodes(element: JsonElement, parentPath: String): FileListing =
         when (element) {
-            is JsonArray -> element.mapNotNull { item ->
-                runCatching { json.decodeFromJsonElement(FileNodeDto.serializer(), item) }
-                    .getOrNull()
-            }.map { it.toDomain(parentPath) }
+            is JsonArray -> {
+                val truncated = element.size > PayloadLimits.MAX_LIST_NODES
+                val nodes = element
+                    .take(PayloadLimits.MAX_LIST_NODES)
+                    .mapNotNull { item ->
+                        runCatching { json.decodeFromJsonElement(FileNodeDto.serializer(), item) }
+                            .getOrNull()
+                    }
+                    .map { it.toDomain(parentPath) }
+                FileListing(entries = nodes, truncated = truncated)
+            }
 
             is JsonObject -> {
                 val wrapper = runCatching {
                     json.decodeFromJsonElement(FileListWrapperDto.serializer(), element)
-                }.getOrNull() ?: return emptyList()
+                }.getOrNull() ?: return FileListing(entries = emptyList(), truncated = false)
                 val rows = wrapper.entries.ifEmpty { wrapper.children }
                 val base = wrapper.path.ifBlank { parentPath }
-                rows.map { it.toDomain(base) }
+                FileListing(
+                    entries = rows.take(PayloadLimits.MAX_LIST_NODES).map { it.toDomain(base) },
+                    truncated = rows.size > PayloadLimits.MAX_LIST_NODES,
+                )
             }
 
-            else -> emptyList()
+            else -> FileListing(entries = emptyList(), truncated = false)
         }
 
     private fun decodeDiffs(element: JsonElement): List<FileDiff> = when (element) {

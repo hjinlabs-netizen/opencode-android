@@ -5,7 +5,7 @@ import com.anomalyco.opencode.domain.error.OpenCodeException
 import com.anomalyco.opencode.domain.model.ChatMessage
 import com.anomalyco.opencode.domain.model.FileContent
 import com.anomalyco.opencode.domain.model.FileDiff
-import com.anomalyco.opencode.domain.model.FileNode
+import com.anomalyco.opencode.domain.model.FileListing
 import com.anomalyco.opencode.domain.model.Session
 import com.anomalyco.opencode.domain.model.SessionSummary
 import com.anomalyco.opencode.domain.repository.FileRepository
@@ -77,10 +77,10 @@ private class FakeWorkspace : WorkspaceRepository {
 
 /** File endpoint double for directory pre-validation (Sprint A P1). */
 private class FakeFiles : FileRepository {
-    var listResult: (String) -> Result<List<FileNode>> = { Result.success(emptyList()) }
+    var listResult: (String) -> Result<FileListing> = { Result.success(FileListing()) }
     val probed = mutableListOf<String>()
 
-    override suspend fun listDirectory(path: String): Result<List<FileNode>> {
+    override suspend fun listDirectory(path: String): Result<FileListing> {
         probed += path
         return listResult(path)
     }

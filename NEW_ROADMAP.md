@@ -97,7 +97,11 @@
 > flag + localized `diff_truncated` notice (partial view, never a failed
 > screen); also fixed the pre-existing double-read dead recovery paths in
 > `health()`/`sendPrompt()`. 306 tests green, lint 0/0, R8 1.83 MB.
-> Remaining: M.4 listing cap, M.5 history part caps, Phase W picker spike.
+> ✅ M.4 directory listings capped at 1 000 nodes BEFORE DTO/domain
+> materialization (`FileListing(entries, truncated)` at the repository
+> boundary + localized `files_list_truncated` plurals notice in the
+> explorer). 309 tests green, lint 0 issues, R8 1.83 MB.
+> Remaining: M.5 history part caps, Phase W picker spike.
 > **Sprint D (hardening):** ✅ `lintDebug` gate (0 errors, 0 warnings; product-decision
 > suppressions documented in `app/build.gradle.kts`) · ✅ GitHub Actions CI
 > (`.github/workflows/android.yml`: unit tests, lint, debug+release assemble, artifact

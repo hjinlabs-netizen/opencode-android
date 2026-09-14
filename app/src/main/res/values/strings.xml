@@ -142,6 +142,10 @@
     <string name="files_empty_folder">Empty folder</string>
     <string name="files_search_hint">Search files…</string>
     <string name="files_search_clear">Clear</string>
+    <plurals name="files_list_truncated">
+        <item quantity="one">Showing the first %1$d item — this folder contains more.</item>
+        <item quantity="other">Showing the first %1$d items — this folder contains more.</item>
+    </plurals>
 
     <!-- Diff viewer -->
     <string name="diff_title">Changes</string>
