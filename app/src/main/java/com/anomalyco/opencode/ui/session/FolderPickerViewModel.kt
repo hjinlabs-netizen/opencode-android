@@ -18,12 +18,13 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Immutable render state for the future folder picker screen (W.3).
+ * Immutable render state for the folder picker screen.
  *
  * Paths are RELATIVE server paths (W.0 contract): the server browses only
  * inside its project root, spelled [ServerPath.ROOT]. The currently browsed
  * directory is itself the primary selection candidate; [selectedFolder]
- * holds the confirmed pick for W.3 to hand to the new-session flow.
+ * holds the confirmed pick handed to the new-session flow via the
+ * navigation result.
  */
 data class FolderPickerUiState(
     /** Directory currently browsed; [ServerPath.ROOT] is the project root. */
@@ -47,7 +48,7 @@ data class FolderPickerUiState(
      * nothing is selected.
      */
     val selectedFolder: String? = null,
-    /** Typed failure of the last listing attempt; rendered localized by W.3. */
+    /** Typed failure of the last listing attempt; rendered localized by the screen. */
     val error: OpenCodeError? = null,
 ) {
     val isAtRoot: Boolean get() = ServerPath.isRoot(currentPath)
@@ -146,7 +147,7 @@ class FolderPickerViewModel @Inject constructor(
                 }
                 .onFailure { error ->
                     // Keep the previous listing visible; the typed error
-                    // drives the localized snackbar/notice in W.3.
+                    // drives the localized snackbar/notice in the screen.
                     _uiState.update { it.copy(isLoading = false, error = error.toDisplayError()) }
                 }
         }

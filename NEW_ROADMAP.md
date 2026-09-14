@@ -108,6 +108,21 @@
 > end-of-turn history refresh replaces the live bubble with capped truth.
 > 316 tests green, lint 0 issues, R8 1.83 MB. Phase M complete.
 > Remaining: Phase W picker spike (W.0) then W.1-W.4.
+> **Phase W (Working Folder picker) — COMPLETE:** W.0 spike validated the
+> live Windows server contract (project-root-scoped browsing, no drive
+> enumeration, 500 on absolute/`..`, `absolute` field on entries, probe
+> chain converges on `/file`) · W.1 `ServerPath` pure utility (root dot,
+> dotdot RESOLUTION - never emitted, separator-style-preserving normalize,
+> safe join; 11 tests) · W.2 `FolderPickerViewModel` (directories-only,
+> breadcrumb/goUp, typed errors, selection state; 8 tests) · W.3
+> `FolderPickerScreen` + `directoryPicker` route + `PICKED_DIRECTORY_KEY`
+> SavedStateHandle result (PICKED_FILE_KEY architecture) + dialog rework
+> (Browse primary / recents / manual collapsed, validation untouched) +
+> `FileNode.absolute` capture with absolute-preferred selection and
+> relative fallback (6 tests) · W.4 polish: localization parity audit
+> (picker keys en/tr complete; `translatable=false` placeholders correct),
+> path-safety review, full gates. 341 unit tests, lint 0 issues, R8
+> release green.
 > **Sprint D (hardening):** ✅ `lintDebug` gate (0 errors, 0 warnings; product-decision
 > suppressions documented in `app/build.gradle.kts`) · ✅ GitHub Actions CI
 > (`.github/workflows/android.yml`: unit tests, lint, debug+release assemble, artifact
