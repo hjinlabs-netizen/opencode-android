@@ -57,10 +57,12 @@ jobs:
       # KVM-enabled ubuntu runner; google_apis (non-Play) image so the lane
       # can manage its own emulator lifecycle without Play restrictions.
       # logcat must be captured INSIDE the runner step (the emulator is torn
-      # down once it exits); the gradle exit status is preserved so the lane
-      # still fails on real test failures. NEVER logcat full buffers blindly
-      # into secrets: the lane runs secret-free and the app's own logging is
-      # sanitizer-gated; this is plain failure evidence.
+      # down once it exits). The script runs under `sh -e`, so the gradle
+      # exit code MUST be harvested via `|| status=$?` — a bare `cmd; s=$?`
+      # aborts at `cmd` and skips the capture (proven by first-run attempt 2
+      # uploading nothing). NEVER use `|| true` on gradle: real failures
+      # must fail the lane; the app's own logging is sanitizer-gated, this
+      # is plain failure evidence and the lane runs secret-free.
       - name: Instrumented tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -70,8 +72,8 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -no-snapshot-save -gpu swiftshader_indirect -camera-back none
           script: |
-            ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
-            status=$?
+            status=0
+            ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace || status=$?
             adb logcat -d -v brief > device-logcat.txt || true
             adb logcat -d -b crash -v brief > device-crashlog.txt || true
             exit $status
