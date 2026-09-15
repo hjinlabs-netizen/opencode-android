@@ -1,15 +1,23 @@
-name: Instrumentation (SSE device tier)
+name: Instrumentation (device tier)
 
 # Sprint 1c.3 — the Android device execution of the shared SSE engine spec
 # (SseEngineAndroidIntegrationTest + AndroidNetworkingCharacteristicsTest).
 # Separate workflow file so the pull_request `paths:` filter applies to the
 # whole lane; the nightly cron below always runs the full device suite.
+# CI-lane hardening: the lane also gates the Sprint 1d production Keystore
+# vault (KeystoreVaultAndroidTest — real AndroidKeyStore AES-GCM, the only
+# device-level coverage for code the JVM suite structurally cannot reach),
+# captures logcat evidence on failure, and runs on every push to main so the
+# first post-merge state is always device-verified.
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
     paths:
       - 'app/src/main/java/com/anomalyco/opencode/data/remote/**'
+      - 'app/src/main/java/com/anomalyco/opencode/data/settings/**'
       - 'app/src/main/java/com/anomalyco/opencode/di/**'
       - 'app/src/sharedTest/**'
       - 'app/src/androidTest/**'
@@ -29,7 +37,7 @@ concurrency:
 
 jobs:
   device-test:
-    name: SSE device tier (API 34 emulator)
+    name: Device tier (API 34 emulator)
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -48,6 +56,11 @@ jobs:
 
       # KVM-enabled ubuntu runner; google_apis (non-Play) image so the lane
       # can manage its own emulator lifecycle without Play restrictions.
+      # logcat must be captured INSIDE the runner step (the emulator is torn
+      # down once it exits); the gradle exit status is preserved so the lane
+      # still fails on real test failures. NEVER logcat full buffers blindly
+      # into secrets: the lane runs secret-free and the app's own logging is
+      # sanitizer-gated; this is plain failure evidence.
       - name: Instrumented tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -56,7 +69,23 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -no-snapshot-save -gpu swiftshader_indirect -camera-back none
-          script: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+          script: |
+            ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+            status=$?
+            adb logcat -d -v brief > device-logcat.txt || true
+            adb logcat -d -b crash -v brief > device-crashlog.txt || true
+            exit $status
+
+      - name: Upload device logcat (failure evidence)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-logcat
+          path: |
+            device-logcat.txt
+            device-crashlog.txt
+          retention-days: 14
+          if-no-files-found: ignore
 
       - name: Upload instrumentation results (XML)
         if: always()
