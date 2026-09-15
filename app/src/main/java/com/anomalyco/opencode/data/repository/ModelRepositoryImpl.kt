@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.data.repository
 
+import com.anomalyco.opencode.data.remote.DebugLog
 import com.anomalyco.opencode.data.remote.OpenCodeApi
 import com.anomalyco.opencode.data.remote.dto.ConfigPatchDto
 import com.anomalyco.opencode.data.remote.requireActiveServer
@@ -28,13 +29,23 @@ class ModelRepositoryImpl @Inject constructor(
     private val store: PreferenceStore,
 ) : ModelRepository {
 
-    override suspend fun fetchProviders(): Result<List<ProviderConfig>> = guarded {
-        val server = connectionRepository.requireActiveServer()
-        val current = runCatching {
-            api.getConfig(server.baseUrl, server.token).toSelection()
-        }.getOrNull()
-        api.getProviders(server.baseUrl, server.token).toDomain(current)
-    }
+    override suspend fun fetchProviders(): Result<List<ProviderConfig>> =
+        guarded {
+            val server = connectionRepository.requireActiveServer()
+            val current = runCatching {
+                api.getConfig(server.baseUrl, server.token).toSelection()
+            }.getOrNull()
+            api.getProviders(server.baseUrl, server.token).toDomain(current)
+        }.onSuccess { providers ->
+            // Device-diagnosis breadcrumb (L.2 pattern): an empty or failing
+            // catalog was invisible on device before the picker bug.
+            DebugLog.log(
+                "models: catalog ok providers=${providers.size} " +
+                    "models=${providers.sumOf { it.models.size }}",
+            )
+        }.onFailure { error ->
+            DebugLog.log("models: catalog load failed: ${error.message}")
+        }
 
     override suspend fun setActiveModel(providerId: String, modelId: String): Result<Unit> {
         // Persist the intent first: even if the network switch fails, the next

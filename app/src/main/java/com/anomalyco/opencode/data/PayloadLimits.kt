@@ -61,7 +61,18 @@ object PayloadLimits {
     /** Budget for the message-carrying endpoints (`/session/{id}/message`). */
     const val MAX_RESPONSE_MESSAGES_BYTES = 16L * 1024 * 1024
 
-    /** Budget for the small metadata endpoints (health, provider, config). */
+    /**
+     * Budget for the `/provider` MODEL CATALOG (device-validated fix): the
+     * response carries every provider with every model's metadata (cost
+     * tables, limits, options) and measurably exceeded the original 1 MB
+     * "small metadata" budget on a real server, which silently emptied the
+     * model picker. 8 MB gives ~8x headroom over the observed size while
+     * keeping a hard ceiling - it is a reclassification of a misjudged
+     * endpoint class, not an unbounded increase.
+     */
+    const val MAX_RESPONSE_CATALOG_BYTES = 8L * 1024 * 1024
+
+    /** Budget for the small metadata endpoints (health, config). */
     const val MAX_RESPONSE_SMALL_BYTES = 1L * 1024 * 1024
 
     /** Hard ceiling on buffered HTTP error bodies (Sprint M.2). */

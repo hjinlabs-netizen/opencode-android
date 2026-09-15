@@ -142,6 +142,31 @@ class ResponseSizeGuardTest {
         assertTrue(failure is ResponseTooLargeException)
     }
 
+    // ---- device-validated regression: the model catalog is NOT "small" ------
+    @Test
+    fun `provider catalog above the old 1 MB metadata budget loads fine`() {
+        val filler = "d".repeat(2 * 1024 * 1024)
+        val catalog = """{"all":[{"id":"p1","name":"$filler","models":[]}],"connected":[],"default":{}}"""
+        val api = api(catalog.toByteArray())
+
+        val providers = runBlocking { api.getProviders("http://localhost", "") }
+
+        assertEquals(1, providers.all.size)
+    }
+
+    @Test
+    fun `provider catalog still fails typed above the 8 MB catalog budget`() {
+        val nine = 9 * 1024 * 1024
+        val api = api(body(nine))
+
+        val failure = failureOf { api.getProviders("http://localhost", "") }
+        assertTrue(failure is ResponseTooLargeException)
+        assertEquals(
+            OpenCodeError.ResponseTooLarge(PayloadLimits.MAX_RESPONSE_CATALOG_BYTES),
+            requireNotNull(failure).toOpenCodeError(),
+        )
+    }
+
     @Test
     fun `SSE streams over the default budget flow through the real engine untouched`() {
         // The guard lives in OpenCodeApi reads; the event feed consumes its
@@ -176,7 +201,7 @@ class ResponseSizeGuardTest {
     fun `budget table matches the approved limits`() {
         assertEquals(PayloadLimits.MAX_RESPONSE_MESSAGES_BYTES, budgetFor("/session/x/message"))
         assertEquals(PayloadLimits.MAX_RESPONSE_SMALL_BYTES, budgetFor("/global/health"))
-        assertEquals(PayloadLimits.MAX_RESPONSE_SMALL_BYTES, budgetFor("/provider"))
+        assertEquals(PayloadLimits.MAX_RESPONSE_CATALOG_BYTES, budgetFor("/provider"))
         assertEquals(PayloadLimits.MAX_RESPONSE_SMALL_BYTES, budgetFor("/config"))
         assertEquals(PayloadLimits.MAX_RESPONSE_DEFAULT_BYTES, budgetFor("/session"))
         assertEquals(PayloadLimits.MAX_RESPONSE_DEFAULT_BYTES, budgetFor("/file"))

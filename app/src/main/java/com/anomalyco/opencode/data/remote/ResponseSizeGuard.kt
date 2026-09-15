@@ -47,7 +47,9 @@ class ResponseTooLargeException(val maxBytes: Long) :
  *
  * Budgets from the approved table, selected by request path:
  *  - `…/message` endpoints (history + end-of-turn long poll): 16 MB
- *  - health / provider / config metadata: 1 MB
+ *  - `/provider` model catalog: 8 MB (device-validated: the full catalog
+ *    with cost tables legitimately exceeds the old 1 MB metadata budget)
+ *  - health / config metadata: 1 MB
  *  - everything else: 4 MB
  *
  * Truncation is deliberately NOT attempted: partial JSON is unparseable, so
@@ -55,7 +57,8 @@ class ResponseTooLargeException(val maxBytes: Long) :
  */
 internal fun budgetFor(path: String): Long = when {
     path.endsWith("/message") -> PayloadLimits.MAX_RESPONSE_MESSAGES_BYTES
-    path == "/global/health" || path == "/provider" || path == "/config" ->
+    path == "/provider" -> PayloadLimits.MAX_RESPONSE_CATALOG_BYTES
+    path == "/global/health" || path == "/config" ->
         PayloadLimits.MAX_RESPONSE_SMALL_BYTES
     else -> PayloadLimits.MAX_RESPONSE_DEFAULT_BYTES
 }
