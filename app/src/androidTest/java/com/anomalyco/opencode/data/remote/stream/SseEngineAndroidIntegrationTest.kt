@@ -17,11 +17,11 @@ package com.anomalyco.opencode.data.remote.stream
  */
 class SseEngineAndroidIntegrationTest : SseEngineIntegrationSpec() {
 
-    override val timeoutMs: Long = 25_000L
+    override val timeoutMs: Long = 35_000L
 
-    override val awaitDeadlineMs: Long = 20_000L
+    override val awaitDeadlineMs: Long = 30_000L
 
-    override val retryObservationMs: Long = 3_000L
+    override val retryObservationMs: Long = 5_000L
 
     /** Cold-verification soak may legitimately run long on first touch. */
     override val warmupMs: Long = 150_000L

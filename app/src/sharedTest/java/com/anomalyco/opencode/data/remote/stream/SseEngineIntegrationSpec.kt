@@ -61,13 +61,14 @@ abstract class SseEngineIntegrationSpec {
     protected val holdMs: Long = 30_000L
 
     /** Timing budgets. JVM values are the original 1c.2 ones; the device
-     * tier overrides all four (2x headroom) because first-touch ART class
-     * verification of the Ktor stack on a cold CI emulator measured 130-260
-     * ms PER CLASS (device logcat, run 35013543353). Even with the
-     * [RuntimeWarmup] soak absorbing that storm, the 2-vCPU swiftshader
-     * emulator delivers loopback frames in seconds where the JVM takes
-     * milliseconds — the assertions are identical, only the deadlines
-     * scale with the platform they run on. */
+     * tier overrides them (sized to CI evidence, see its class KDoc) because
+     * first-touch ART class verification of the Ktor stack on a cold CI
+     * emulator measured 130-260 ms PER CLASS (device logcat, run
+     * 35013543353), and even with the [RuntimeWarmup] soak absorbing that
+     * storm, CI attempt 5 measured loopback multi-step scenarios landing at
+     * 22-31 s on the FIRST try with zero functional failures — the
+     * assertions are identical, only the deadlines scale with the platform
+     * they run on. */
     protected open val timeoutMs: Long = 15_000L
     protected open val awaitDeadlineMs: Long = 12_000L
     protected open val retryObservationMs: Long = 1_500L
