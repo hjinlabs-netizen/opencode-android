@@ -123,6 +123,20 @@
 > (picker keys en/tr complete; `translatable=false` placeholders correct),
 > path-safety review, full gates. 341 unit tests, lint 0 issues, R8
 > release green.
+> **Device round 2 (post-hotfix) fixes:** ✅ model picker empty + "server
+> response too large (limit 1 MB)" on session entry shared ONE root cause:
+> `/provider` carries the full model catalog (all providers x models x cost
+> tables), legitimately exceeding the M.1 "small metadata" 1 MB budget -
+> reclassified to `MAX_RESPONSE_CATALOG_BYTES` (8 MB; device-measured
+> headroom, hard ceiling kept; health/config stay 1 MB) + debug-only
+> `fetchProviders` success/failure breadcrumbs · ✅ the
+> `chat_history_too_large` notice now persists as a top strip while new
+> messages stream in (previously vanished after the first send).
+> **Oversized history - protocol requirement (documented, NOT hacked):** a
+> real fix needs server-side paging on `GET /session/{id}/message`
+> (`limit`/`before` or a recent-window endpoint). Client-side partial-JSON
+> recovery stays rejected (truncated JSON is unparseable). Track under
+> Phase 3 / server-upstream.
 > **Sprint D (hardening):** ✅ `lintDebug` gate (0 errors, 0 warnings; product-decision
 > suppressions documented in `app/build.gradle.kts`) · ✅ GitHub Actions CI
 > (`.github/workflows/android.yml`: unit tests, lint, debug+release assemble, artifact

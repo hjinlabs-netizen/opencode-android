@@ -313,6 +313,19 @@ private fun MessageList(
                     onCodeCopied = onCodeCopied,
                 )
             }
+            if (state.historyTooLarge) {
+                // reverseLayout: the LAST declared item sits at the top, so
+                // the "history unavailable" notice stays visible even after
+                // the first new message arrives (device-feedback polish).
+                item(key = "history-too-large-notice") {
+                    Text(
+                        text = stringResource(R.string.chat_history_too_large),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
+                }
+            }
         }
     }
 }
