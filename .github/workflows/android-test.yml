@@ -54,6 +54,15 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      # Build OFF-emulator first: connectedDebugAndroidTest otherwise compiles
+      # the whole app (~50 tasks) on 2 runner vCPUs while the instrumented
+      # tests are ALREADY racing inside the emulator — the starvation tripled
+      # loopback socket latencies (first run: 3 timing-only test failures that
+      # all passed on retry; zero network errors in the 6 MB device logcat).
+      # Prebuilding makes the connected step install-and-run only.
+      - name: Build app + instrumentation APKs
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --stacktrace
+
       # KVM-enabled ubuntu runner; google_apis (non-Play) image so the lane
       # can manage its own emulator lifecycle without Play restrictions.
       # logcat must be captured INSIDE the runner step (the emulator is torn
