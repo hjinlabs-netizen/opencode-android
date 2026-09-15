@@ -80,6 +80,7 @@
     <string name="chat_model_working">Model çalışıyor…</string>
     <string name="chat_abort">İptal Et</string>
     <string name="chat_retry">Tekrar Dene</string>
+    <string name="chat_history_too_large">Sohbet geçmişi yüklemek için çok büyük — yeni mesajlar burada çalışmaya devam eder.</string>
     <string name="chat_role_you">Sen</string>
     <string name="chat_role_assistant">Asistan</string>
     <string name="chat_typing">Yanıtlanıyor…</string>

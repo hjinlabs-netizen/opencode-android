@@ -40,6 +40,7 @@ private class FakeSessionRepository : SessionRepository {
     override val sessions: Flow<List<SessionSummary>> = MutableStateFlow(emptyList())
 
     var history: List<ChatMessage> = emptyList()
+    var loadFailure: Throwable? = null
     var session: Session = Session(id = "s1", title = "Ses")
     var loadCalls = 0
     var sendResult: (String) -> Result<ChatMessage> = {
@@ -58,6 +59,7 @@ private class FakeSessionRepository : SessionRepository {
     override suspend fun deleteSession(sessionId: String) = Result.success(Unit)
     override suspend fun loadMessages(sessionId: String): Result<List<ChatMessage>> {
         loadCalls++
+        loadFailure?.let { return Result.failure(it) }
         return Result.success(history)
     }
     override suspend fun sendPrompt(sessionId: String, text: String, agent: String?): Result<ChatMessage> {
@@ -809,25 +811,54 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `picked file from explorer appends mention and clears the nav result`() = runTest {
-        val (vm, _, _, _, _, handle) = build()
+    fun `picked file from explorer appends mention for every forwarded result`() = runTest {
+        val (vm, _, _, _, _, _) = build()
         advanceUntilIdle()
 
         vm.onInputChange("şu dosyaya bak:")
-        handle[ChatViewModel.PICKED_FILE_KEY] = """Desktop\t24\app\build.gradle.kts"""
+        // W.4: the nav-graph collector consumes the entry-handle result and
+        // forwards it through onFilePicked; the VM no longer watches the
+        // handle itself (the Hilt-injected instance never sees
+        // previousBackStackEntry writes - the device-verified root cause).
+        vm.onFilePicked("""Desktop\t24\app\build.gradle.kts""")
         advanceUntilIdle()
 
         assertEquals(
             "şu dosyaya bak: @Desktop\\t24\\app\\build.gradle.kts ",
             vm.uiState.value.input,
         )
-        // Result consumed: cleared so rotation does not re-append.
-        assertNull(handle.get<String>(ChatViewModel.PICKED_FILE_KEY))
 
-        // A second pick appends again.
-        handle[ChatViewModel.PICKED_FILE_KEY] = "src/main.kt"
-        advanceUntilIdle()
+        // A second pick appends again; blank results are ignored.
+        vm.onFilePicked("src/main.kt")
         assertTrue(vm.uiState.value.input.endsWith("@src/main.kt "))
+        vm.onFilePicked("")
+        assertTrue(vm.uiState.value.input.endsWith("@src/main.kt "))
+    }
+
+    @Test
+    fun `oversized history sets the too-large banner instead of a transient error`() = runTest {
+        val (vm, sessions) = build()
+        advanceUntilIdle()
+
+        sessions.loadFailure = OpenCodeException(
+            OpenCodeError.ResponseTooLarge(com.anomalyco.opencode.data.PayloadLimits.MAX_RESPONSE_MESSAGES_BYTES),
+        )
+        vm.refresh()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.historyTooLarge)
+        assertNull("banner replaces the snackbar", vm.uiState.value.error)
+        assertFalse(vm.uiState.value.isLoadingHistory)
+
+        // Recovery: a later successful load (e.g. smaller page or new
+        // server) clears the banner and restores the transcript.
+        sessions.loadFailure = null
+        sessions.history = listOf(ChatMessage(id = "m1", sessionId = "s1"))
+        vm.refresh()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.historyTooLarge)
+        assertEquals(listOf("m1"), vm.uiState.value.messages.map { it.id })
     }
 
     @Test

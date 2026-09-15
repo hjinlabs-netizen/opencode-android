@@ -13,7 +13,13 @@ class TruncationStringsTest {
 
     @Test
     fun `truncation notices exist in the English default and Turkish locale`() {
-        listOf("content_truncated", "preview_truncated", "diff_truncated").forEach { name ->
+        listOf(
+            "content_truncated",
+            "preview_truncated",
+            "diff_truncated",
+            "chat_history_too_large",
+            "error_response_too_large",
+        ).forEach { name ->
             assertTrue("$name missing from values/strings.xml", LocaleResourceStrings.hasEntry("values", name))
             assertTrue("$name missing from values-tr", LocaleResourceStrings.hasEntry("values-tr", name))
         }

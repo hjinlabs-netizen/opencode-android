@@ -85,6 +85,12 @@ data class ChatUiState(
     val switchingModelId: String? = null,
     /** Text of the most recent prompt; enables the retry affordance (Sprint C). */
     val lastPrompt: String? = null,
+    /**
+     * True when the stored history exceeded the response-size budget (W.4):
+     * the transcript cannot be shown but the session stays fully usable for
+     * new prompts; the screen renders a localized banner instead of an error.
+     */
+    val historyTooLarge: Boolean = false,
     val error: OpenCodeError? = null,
 )
 /**
@@ -162,15 +168,16 @@ class ChatViewModel @Inject constructor(
                 runCatching { onStreamEvent(event) }
             }
         }
-        // File chosen in the explorer ("Sohbete Ekle") arrives as a nav result.
-        viewModelScope.launch {
-            savedStateHandle.getStateFlow<String?>(PICKED_FILE_KEY, null).collect { path ->
-                if (!path.isNullOrBlank()) {
-                    _uiState.update { it.copy(input = appendMention(it.input, path)) }
-                    savedStateHandle[PICKED_FILE_KEY] = null
-                }
-            }
-        }
+    }
+
+    /**
+     * File chosen in the explorer ("Sohbete Ekle"): the nav-graph collector
+     * forwards the back-stack-entry result here (W.4 - the entry's own
+     * SavedStateHandle is the object the writer touches).
+     */
+    fun onFilePicked(path: String) {
+        if (path.isBlank()) return
+        _uiState.update { it.copy(input = appendMention(it.input, path)) }
     }
 
     /** (Re)loads the message transcript and session metadata from the server. */
@@ -193,18 +200,29 @@ class ChatViewModel @Inject constructor(
                             // transcript. Keep what the user already sees
                             // until real rows arrive.
                             history.isEmpty() && current.messages.isNotEmpty() ->
-                                current.copy(isLoadingHistory = false)
+                                current.copy(isLoadingHistory = false, historyTooLarge = false)
                             else ->
                                 current.copy(
                                     messages = capTranscript(history) + listOfNotNull(live),
                                     isLoadingHistory = false,
+                                    historyTooLarge = false,
                                 )
                         }
                     }
                 }
                 .onFailure { error ->
-                    _uiState.update {
-                        it.copy(isLoadingHistory = false, error = error.toDisplayError())
+                    val typed = error.toDisplayError()
+                    if (typed is OpenCodeError.ResponseTooLarge) {
+                        // W.4: an oversized history is permanent for this
+                        // session - show the calm banner, not a snackbar that
+                        // vanishes; sending and live streaming still work.
+                        _uiState.update {
+                            it.copy(isLoadingHistory = false, historyTooLarge = true)
+                        }
+                    } else {
+                        _uiState.update {
+                            it.copy(isLoadingHistory = false, error = typed)
+                        }
                     }
                 }
         }

@@ -1,12 +1,14 @@
 package com.anomalyco.opencode.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.anomalyco.opencode.ui.chat.ChatScreen
 import com.anomalyco.opencode.ui.chat.ChatViewModel
 import com.anomalyco.opencode.ui.connection.ConnectionScreen
@@ -68,8 +70,24 @@ fun OpenCodeNavGraph(
             )
         }
 
-        composable(Routes.SESSIONS) {
+        composable(Routes.SESSIONS) { entry ->
+            // W.4: navigation results MUST be read from the back stack
+            // entry's OWN SavedStateHandle (the documented pattern) - the
+            // handle Hilt injects into the ViewModel is a different
+            // instance and never observes previousBackStackEntry writes.
+            val viewModel: SessionListViewModel = hiltViewModel(entry)
+            LaunchedEffect(entry) {
+                entry.savedStateHandle
+                    .getStateFlow<String?>(SessionListViewModel.PICKED_DIRECTORY_KEY, null)
+                    .collect { path ->
+                        if (!path.isNullOrBlank()) {
+                            viewModel.onDirectoryInputChange(path)
+                            entry.savedStateHandle[SessionListViewModel.PICKED_DIRECTORY_KEY] = null
+                        }
+                    }
+            }
             SessionListScreen(
+                viewModel = viewModel,
                 onOpenChat = { sessionId ->
                     navController.navigate(Routes.chat(sessionId))
                 },
@@ -102,8 +120,22 @@ fun OpenCodeNavGraph(
             arguments = listOf(
                 navArgument(Routes.CHAT_ARGUMENT) { type = NavType.StringType },
             ),
-        ) {
+        ) { entry ->
+            // W.4: same entry-handle fix for the explorer "add to chat"
+            // result as for the folder picker above.
+            val viewModel: ChatViewModel = hiltViewModel(entry)
+            LaunchedEffect(entry) {
+                entry.savedStateHandle
+                    .getStateFlow<String?>(ChatViewModel.PICKED_FILE_KEY, null)
+                    .collect { path ->
+                        if (!path.isNullOrBlank()) {
+                            viewModel.onFilePicked(path)
+                            entry.savedStateHandle[ChatViewModel.PICKED_FILE_KEY] = null
+                        }
+                    }
+            }
             ChatScreen(
+                viewModel = viewModel,
                 onBack = { navController.popBackStack() },
                 onOpenFiles = { directory ->
                     navController.navigate(Routes.files(directory))

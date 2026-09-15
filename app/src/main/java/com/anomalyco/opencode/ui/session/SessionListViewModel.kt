@@ -1,6 +1,5 @@
 package com.anomalyco.opencode.ui.session
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anomalyco.opencode.domain.error.OpenCodeError
@@ -53,7 +52,6 @@ data class SessionListUiState(
  */
 @HiltViewModel
 class SessionListViewModel @Inject constructor(
-    private val savedStateHandle: SavedStateHandle,
     private val sessionRepository: SessionRepository,
     private val workspaceRepository: WorkspaceRepository,
     private val fileRepository: FileRepository,
@@ -70,16 +68,6 @@ class SessionListViewModel @Inject constructor(
         viewModelScope.launch {
             sessionRepository.sessions.collect { list ->
                 _uiState.update { state -> state.copy(sessions = list, isLoading = false) }
-            }
-        }
-        // Folder picker result (W.3): populate the manual field exactly as
-        // typing would; validation and creation stay on the existing path.
-        viewModelScope.launch {
-            savedStateHandle.getStateFlow<String?>(PICKED_DIRECTORY_KEY, null).collect { path ->
-                if (!path.isNullOrBlank()) {
-                    onDirectoryInputChange(path)
-                    savedStateHandle[PICKED_DIRECTORY_KEY] = null
-                }
             }
         }
         refresh()

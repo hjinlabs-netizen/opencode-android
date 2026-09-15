@@ -61,6 +61,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -279,6 +280,19 @@ private fun MessageList(
     }
 
     when {
+        state.historyTooLarge && state.messages.isEmpty() -> Box(
+            modifier = modifier.padding(horizontal = 24.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            // W.4: oversized history is a calm permanent state, not an error.
+            Text(
+                text = stringResource(R.string.chat_history_too_large),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+
         state.isLoadingHistory && state.messages.isEmpty() -> Box(
             modifier = modifier,
             contentAlignment = Alignment.Center,

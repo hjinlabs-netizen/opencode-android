@@ -1,6 +1,5 @@
 package com.anomalyco.opencode.ui.session
 
-import androidx.lifecycle.SavedStateHandle
 import com.anomalyco.opencode.domain.error.OpenCodeError
 import com.anomalyco.opencode.domain.error.OpenCodeException
 import com.anomalyco.opencode.domain.model.ChatMessage
@@ -100,9 +99,8 @@ class SessionListViewModelTest {
         val repository: Fake = Fake(),
         val workspace: FakeWorkspace = FakeWorkspace(),
         val files: FakeFiles = FakeFiles(),
-        val handle: SavedStateHandle = SavedStateHandle(),
     ) {
-        val viewModel = SessionListViewModel(handle, repository, workspace, files)
+        val viewModel = SessionListViewModel(repository, workspace, files)
     }
 
     @Test
@@ -110,7 +108,7 @@ class SessionListViewModelTest {
         val h = Harness()
         h.repository.refreshResult =
             Result.failure(OpenCodeException(OpenCodeError.Network(OpenCodeError.NetworkKind.Connect)))
-        val vm = SessionListViewModel(SavedStateHandle(), h.repository, h.workspace, h.files)
+        val vm = SessionListViewModel(h.repository, h.workspace, h.files)
         advanceUntilIdle()
 
         assertEquals(
@@ -209,18 +207,45 @@ class SessionListViewModelTest {
 
     @Test
     fun `folder picker result populates the working folder input`() = runTest {
-        val handle = SavedStateHandle()
-        val h = Harness(handle = handle)
+        val h = Harness()
         advanceUntilIdle()
 
-        // FolderPickerScreen hands the resolved path back via the
-        // SavedStateHandle (PICKED_FILE_KEY architecture).
-        handle[SessionListViewModel.PICKED_DIRECTORY_KEY] = "C:\\work\\picked"
+        // W.4 mechanism: the nav-graph collector reads the back-stack
+        // ENTRY's SavedStateHandle (the object the picker writes to) and
+        // forwards the picked path through onDirectoryInputChange - the
+        // VM-level contract is pinned here.
+        h.viewModel.onDirectoryInputChange("C:\\work\\picked")
         advanceUntilIdle()
 
         assertEquals("C:\\work\\picked", h.viewModel.uiState.value.directoryInput)
         assertNull(h.viewModel.uiState.value.directoryError)
-        assertNull(handle.get<String?>(SessionListViewModel.PICKED_DIRECTORY_KEY))
+    }
+
+    @Test
+    fun `picked folder enables the create button condition`() = runTest {
+        val h = Harness()
+        advanceUntilIdle()
+        assertFalse(h.viewModel.uiState.value.directoryInput.isNotBlank())
+
+        h.viewModel.onDirectoryInputChange("C:\\Users\\zuley\\Desktop\\t24")
+
+        val state = h.viewModel.uiState.value
+        assertTrue("Create-enable condition: non-blank input", state.directoryInput.isNotBlank())
+        assertFalse("Create-enable condition: not already creating", state.isCreating)
+    }
+
+    @Test
+    fun `picked path survives a list refresh while the dialog stays open`() = runTest {
+        val h = Harness()
+        advanceUntilIdle()
+        h.viewModel.showDirectoryDialog()
+        h.viewModel.onDirectoryInputChange("C:\\work\\t24")
+
+        h.viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals("C:\\work\\t24", h.viewModel.uiState.value.directoryInput)
+        assertTrue(h.viewModel.uiState.value.showDirectoryDialog)
     }
 
     @Test

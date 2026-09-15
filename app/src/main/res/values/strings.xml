@@ -89,6 +89,7 @@
     <string name="chat_model_working">Model is working…</string>
     <string name="chat_abort">Abort</string>
     <string name="chat_retry">Retry</string>
+    <string name="chat_history_too_large">Chat history is too large to load — new messages still work here.</string>
     <string name="chat_role_you">You</string>
     <string name="chat_role_assistant">Assistant</string>
     <string name="chat_typing">Answering…</string>
