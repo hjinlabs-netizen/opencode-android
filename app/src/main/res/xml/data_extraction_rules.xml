@@ -2,8 +2,9 @@
 <!--
     Android 12+ replacement for android:allowBackup="false": neither cloud
     backup nor device-to-device transfer may pull anything out of the app.
-    The server token lives in EncryptedSharedPreferences; the whole data
-    directory is excluded regardless (NEW_ROADMAP §6.3/§6.6: no telemetry,
+    The server token lives in a Keystore AES-GCM vault (Sprint 1d; previously
+    EncryptedSharedPreferences); the whole data directory is excluded
+    regardless (NEW_ROADMAP §6.3/§6.6: no telemetry,
     nothing user-restorable leaves the device).
 -->
 <data-extraction-rules>

@@ -13,7 +13,7 @@ interface ConnectionRepository {
     /** Emits the saved [ServerConfig], if any. Completes without emitting when empty. */
     val config: Flow<ServerConfig?>
 
-    /** Persist the configuration securely (EncryptedSharedPreferences). */
+    /** Persist the configuration securely (AndroidKeyStore AES-GCM vault, Sprint 1d). */
     suspend fun saveConfig(config: ServerConfig)
 
     /** Clear the persisted configuration. */

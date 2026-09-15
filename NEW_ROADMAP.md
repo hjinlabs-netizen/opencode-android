@@ -137,6 +137,20 @@
 > (`limit`/`before` or a recent-window endpoint). Client-side partial-JSON
 > recovery stays rejected (truncated JSON is unparseable). Track under
 > Phase 3 / server-upstream.
+> **Sprint 1d (secure storage migration):** ✅ server-config persistence moved
+> off the DEPRECATED `EncryptedSharedPreferences` (security-crypto/Tink,
+> frozen at alpha06; lazy-create could also crash startup) onto a first-party
+> `AndroidKeyStore` AES-256-GCM envelope (`TokenCipher`/`AesGcmEnvelope` +
+> `KeystoreAesGcmCipher`: non-exportable key, provider-generated unique IV
+> per call, 128-bit tag verified, fail-closed `null` on any auth failure).
+> The whole `{url,token}` config is ONE atomic envelope in a plain vault file
+> (`opencode_vault_prefs/server_config_v1`); `ConfigVault` runs the migration
+> (read legacy -> encrypt -> write -> read-back verify -> destroy legacy
+> file): idempotent, crash-safe (legacy retired only after the encrypted
+> copy verifies), retryable, never opened on fresh installs. Public
+> `SecureSettingsStore` API unchanged -> zero caller/DI/UI churn. The
+> security-crypto dependency stays ONLY as the legacy read bridge; removal
+> is tracked for the release after migration coverage peaks.
 > **Sprint D (hardening):** ✅ `lintDebug` gate (0 errors, 0 warnings; product-decision
 > suppressions documented in `app/build.gradle.kts`) · ✅ GitHub Actions CI
 > (`.github/workflows/android.yml`: unit tests, lint, debug+release assemble, artifact
@@ -286,7 +300,8 @@
 3. Play Store data-safety form (no telemetry currently — keep it that way; logs are INFO-level, bodies excluded).
 4. Cleartext justification for review (LAN self-hosted server; documented in `network_security_config.xml`).
 5. Target SDK bump cadence (currently 36) + baseline profile in the release artifact.
-6. Privacy: tokens stay in `EncryptedSharedPreferences`; recent-directories list is *not* encrypted —
+6. Privacy: tokens live in a Keystore AES-GCM vault (Sprint 1d; migrated off
+   `EncryptedSharedPreferences`); recent-directories list is *not* encrypted —
    acceptable (paths), but call it out in the data-safety declaration.
 
 ---
