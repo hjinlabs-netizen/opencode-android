@@ -78,6 +78,14 @@ jobs:
           api-level: 34
           target: google_apis
           arch: x86_64
+          # Root-cause sizing (attempts 4-6 artifacts): the guest booted with
+          # the emulator's DEFAULT 2 vCPU / ~2.5 GB while the multi-step SSE
+          # chains need real scheduling headroom (per-test logcat showed
+          # 130-260 ms ART verification per touched class even warm). The
+          # ubuntu-latest host offers 4 cores / 16 GB — give the guest the
+          # machine instead of inflating test deadlines past the evidence.
+          cores: 4
+          memory: 4096
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -no-snapshot-save -gpu swiftshader_indirect -camera-back none
           script: |
