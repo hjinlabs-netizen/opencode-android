@@ -9,5 +9,20 @@ package com.anomalyco.opencode.data.remote.stream
  * OkHttp's Android engine behavior. First execution is the CI emulator lane
  * (API 34, 1c.3); no behavior is expected to diverge from Tier A — that
  * equivalence IS the assertion.
+ *
+ * The overrides below scale ONLY the timing budgets to the platform (see
+ * the KDoc in the base class: measured first-touch ART verification storms
+ * and 2-vCPU swiftshader loopback latency in the first CI runs); the case
+ * bodies, fixtures and assertions are the shared spec's, untouched.
  */
-class SseEngineAndroidIntegrationTest : SseEngineIntegrationSpec()
+class SseEngineAndroidIntegrationTest : SseEngineIntegrationSpec() {
+
+    override val timeoutMs: Long = 25_000L
+
+    override val awaitDeadlineMs: Long = 20_000L
+
+    override val retryObservationMs: Long = 3_000L
+
+    /** Cold-verification soak may legitimately run long on first touch. */
+    override val warmupMs: Long = 150_000L
+}

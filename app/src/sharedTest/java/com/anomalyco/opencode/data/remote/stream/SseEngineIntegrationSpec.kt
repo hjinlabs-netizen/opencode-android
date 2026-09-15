@@ -7,6 +7,7 @@ import com.anomalyco.opencode.domain.model.ServerConfig
 import com.anomalyco.opencode.domain.model.StreamEvent
 import com.anomalyco.opencode.domain.model.StreamStatus
 import com.anomalyco.opencode.util.FakeConnectionRepository
+import com.anomalyco.opencode.util.RuntimeWarmup
 import com.anomalyco.opencode.util.SseTestServer
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -57,7 +59,24 @@ abstract class SseEngineIntegrationSpec {
     private val servers = mutableListOf<SseTestServer>()
 
     protected val holdMs: Long = 30_000L
-    protected val timeoutMs: Long = 15_000L
+
+    /** Timing budgets. JVM values are the original 1c.2 ones; the device
+     * tier overrides all four (2x headroom) because first-touch ART class
+     * verification of the Ktor stack on a cold CI emulator measured 130-260
+     * ms PER CLASS (device logcat, run 35013543353). Even with the
+     * [RuntimeWarmup] soak absorbing that storm, the 2-vCPU swiftshader
+     * emulator delivers loopback frames in seconds where the JVM takes
+     * milliseconds — the assertions are identical, only the deadlines
+     * scale with the platform they run on. */
+    protected open val timeoutMs: Long = 15_000L
+    protected open val awaitDeadlineMs: Long = 12_000L
+    protected open val retryObservationMs: Long = 1_500L
+    protected open val warmupMs: Long = 30_000L
+
+    /** Absorbs the cold-runtime verification cost before any assertion runs
+     * (once per process — see [RuntimeWarmup]). */
+    @Before
+    fun warmRuntime() = runBlocking { RuntimeWarmup.soakSseStackOnce(client, scope, warmupMs) }
 
     @After
     fun tearDown() {
@@ -95,7 +114,7 @@ abstract class SseEngineIntegrationSpec {
     ): CopyOnWriteArrayList<StreamEvent> =
         CopyOnWriteArrayList<StreamEvent>().also { seen -> scope.launch { events.collect { seen += it; onEvent(it) } } }
 
-    protected suspend fun awaitUntil(what: String, deadlineMs: Long = 12_000, condition: () -> Boolean) {
+    protected suspend fun awaitUntil(what: String, deadlineMs: Long = awaitDeadlineMs, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + deadlineMs
         while (System.currentTimeMillis() < deadline) {
             if (condition()) return
@@ -306,7 +325,7 @@ abstract class SseEngineIntegrationSpec {
         runBlocking {
             stream.start(config(server.baseUrl))
             awaitUntil("AuthRejected") { errorOf(statuses) == OpenCodeError.AuthRejected }
-            delay(1_500) // allow at least one backed-off retry
+            delay(retryObservationMs) // allow at least one backed-off retry
         }
 
         val paths = server.requests.map { it.path }
