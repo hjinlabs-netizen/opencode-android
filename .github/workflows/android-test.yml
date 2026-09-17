@@ -85,7 +85,7 @@ jobs:
           # ubuntu-latest host offers 4 cores / 16 GB — give the guest the
           # machine instead of inflating test deadlines past the evidence.
           cores: 4
-          memory: 4096
+          ram-size: 4096
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -no-snapshot-save -gpu swiftshader_indirect -camera-back none
           script: |
