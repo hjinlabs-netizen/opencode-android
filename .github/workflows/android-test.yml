@@ -63,8 +63,22 @@ jobs:
       - name: Build app + instrumentation APKs
         run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --stacktrace
 
-      # KVM-enabled ubuntu runner; google_apis (non-Play) image so the lane
-      # can manage its own emulator lifecycle without Play restrictions.
+      # KVM setup: github-hosted ubuntu-24.04 runners expose /dev/kvm but
+      # the runner user is not in the kvm group by default. The
+      # android-emulator-runner action (disable-linux-hw-accel: auto) probes
+      # /dev/kvm via fs.accessSync(R_OK|W_OK) before spawning the emulator;
+      # without write access it falls back to -accel off (software x86_64
+      # emulation), which boots API 34 in 590-900+ s — a coin flip against
+      # the default 600 s emulator-boot-timeout.  chmod 666 is the only fix
+      # that works here: the action's node process inherits supplementary
+      # groups at startup so usermod+newgrp arrives too late, whereas device
+      # file permissions are checked per-call.  Safe on single-use CI runners.
+      - name: Configure KVM
+        run: |
+          sudo chmod 666 /dev/kvm
+          ls -la /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm && echo "KVM accessible" || echo "KVM not accessible"
+
       # logcat must be captured INSIDE the runner step (the emulator is torn
       # down once it exits). The script runs under `sh -e`, so the gradle
       # exit code MUST be harvested via `|| status=$?` — a bare `cmd; s=$?`
@@ -87,6 +101,7 @@ jobs:
           cores: 4
           ram-size: 4096
           disable-animations: true
+          emulator-boot-timeout: 1200
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -no-snapshot-save -gpu swiftshader_indirect -camera-back none
           script: |
             status=0
