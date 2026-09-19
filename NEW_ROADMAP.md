@@ -228,9 +228,7 @@
 
 ## 3. Performance & Memory (P2)
 
-1. **Compose recomposition scopes**: `MessageList` runs `messages.asReversed()` + the tail-length
-   sum on every token; wrap in `remember(state.messages)` and pass minimal lambdas. Add
-   `contentType` to the chat `LazyColumn` items (bubble vs step vs tool rows) for view-type reuse.
+1. **Compose recomposition scopes**: ✅ `MessageList` optimized (commit b1c365d): `messages.asReversed()` wrapped in `remember()`, `tailSignature` uses `derivedStateOf`, `contentType` added to LazyColumn items (user/assistant), `ChatUiState` marked `@Stable`, `onCodeCopied` lambda stabilized. Remaining: `contentType` for bubble vs step vs tool rows (granular per-part-type reuse).
  2. **[RESOLVED Sprint C] Endpoint-probe caching**: `FileRepositoryImpl` now
     memoizes the winning endpoint per `baseUrl|operation` (list/read/diff), clears
     the cache on any server-config change, and demotes a cached winner that starts
