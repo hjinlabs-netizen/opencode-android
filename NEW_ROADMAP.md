@@ -35,7 +35,7 @@
 > (`PreferenceStore` keys `last_selected_provider_id`/`last_selected_model_id`, cold-start
 > seed + automatic `/config` reconcile without opening the picker). Covered by the strict
 > synchronous-abort VM test, the cold-start persistence test, and the abort wire test.
-> **Still open:** §6 versionCode automation. (P0-6 closed by Sprint 1c.3 —
+> **Still open:** ~~§6 versionCode automation~~ ✅ RESOLVED (commit 90e4a09 — `git rev-list --count HEAD`, currently 66). (P0-6 closed by Sprint 1c.3 —
 > see below; first device execution lands via the new CI lane.)
 > **Sprint 1a (Phase 1 — typed errors, i18n, cleanup):** ✅ typed `OpenCodeError` +
 > single `OpenCodeException` carrier + shared `apiCall` wrapper · ✅ all user-facing
@@ -295,7 +295,7 @@
 
 1. ✅ Signing config wired in Sprint D (`keystore.properties` for local, `KEYSTORE_*`
    env vars for CI, unsigned fallback so `assembleRelease` builds everywhere).
-   Remaining: `versionCode` automation (release is still unsigned unless a keystore is supplied).
+   ✅ `versionCode` automation resolved (commit 90e4a09 — `git rev-list --count HEAD`).
 2. R8 mapping upload to crash reporting; enable `android.enableR8.fullMode` evaluation.
 3. Play Store data-safety form (no telemetry currently — keep it that way; logs are INFO-level, bodies excluded).
 4. Cleartext justification for review (LAN self-hosted server; documented in `network_security_config.xml`).
