@@ -235,7 +235,7 @@
     memoizes the winning endpoint per `baseUrl|operation` (list/read/diff), clears
     the cache on any server-config change, and demotes a cached winner that starts
     failing — routine browsing is a single request.
-3. **Baseline profile**: generate one (`androidx.baselineprofile` plugin + macrobenchmark) —
+3. ✅ Baseline profile (P2-3): `androidx.baselineprofile` plugin + `benchmark-macro-junit4` + `profileinstaller` wired (commit aa2bddb); `StartupBenchmark` measures cold-start `MainActivity` launch. `./gradlew generateBaselineProfile` on a connected device produces `baseline-prof.txt` that pre-warms Compose + Hilt + Ktor hot paths at install time. — generate one (`androidx.baselineprofile` plugin + macrobenchmark) —
    Compose + Ktor startup paths dominate cold start on low-end devices.
 4. **Coroutine cancellation**: `ChatViewModel` collectors live on `viewModelScope` (correct), but
    `OpenCodeStreamClient` owns a raw app-scope `Job` chain; add a supervisor-child registry so
