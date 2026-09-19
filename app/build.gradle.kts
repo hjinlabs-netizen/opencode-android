@@ -28,6 +28,22 @@ fun signingProperty(key: String, env: String): String? =
 
 val releaseKeystorePath: String? = signingProperty("storeFile", "KEYSTORE_PATH")
 
+// ============================================================================
+// VersionCode automation (§6.2): derived from git commit count.
+// Every commit on the main branch produces a unique, monotonically increasing
+// integer — no manual bumps, no collisions, CI-compatible. The count is
+// computed at configuration time via `git rev-list --count HEAD`.
+// ============================================================================
+val gitCommitCount: Int by lazy {
+    val process = ProcessBuilder("git", "rev-list", "--count", "HEAD")
+        .directory(rootDir)
+        .redirectErrorStream(true)
+        .start()
+    val count = process.inputStream.bufferedReader().readText().trim().toIntOrNull()
+    process.waitFor()
+    count ?: 1
+}
+
 android {
     namespace = "com.anomalyco.opencode"
     compileSdk = 36
@@ -40,7 +56,7 @@ android {
         applicationId = "com.hjinlabs.opencodeclient"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
+        versionCode = gitCommitCount
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
