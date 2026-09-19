@@ -296,7 +296,7 @@
 1. ✅ Signing config wired in Sprint D (`keystore.properties` for local, `KEYSTORE_*`
    env vars for CI, unsigned fallback so `assembleRelease` builds everywhere).
    ✅ `versionCode` automation resolved (commit 90e4a09 — `git rev-list --count HEAD`).
-2. R8 mapping upload to crash reporting; enable `android.enableR8.fullMode` evaluation.
+2. ✅ R8 mapping upload to crash reporting (CI uploads `r8-mapping` artifact, 3.4 MB); ✅ `android.enableR8.fullMode` enabled (commit b6926df — release APK 1.85 MB, mapping 37 MB, all tests green). Upload to a specific crash reporting service (Firebase Crashlytics / Sentry) is tracked separately.
 3. Play Store data-safety form (no telemetry currently — keep it that way; logs are INFO-level, bodies excluded).
 4. Cleartext justification for review (LAN self-hosted server; documented in `network_security_config.xml`).
 5. Target SDK bump cadence (currently 36) + baseline profile in the release artifact.
