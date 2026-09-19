@@ -15,7 +15,11 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.plugins.sse.SSE
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
+import okhttp3.Dispatcher
+import java.util.concurrent.Executors
+import java.util.concurrent.ThreadFactory
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Singleton
 
 /**
@@ -76,6 +80,14 @@ object NetworkModule {
             }
         }
         engine {
+            // Ktor 3.1.3 race condition: OkHttpSSESession.onFailure can fire
+            // before originResponse is initialized (JVM field visibility gap
+            // between constructor and OkHttp callback thread). The NPE escapes
+            // to OkHttp's thread pool, killing the process. Install a custom
+            // UncaughtExceptionHandler on the dispatcher threads so the NPE is
+            // logged rather than crashing the app — the SSE supervisor will
+            // observe the connection drop and retry with backoff.
+            val threadCounter = AtomicInteger()
             config {
                 connectTimeout(5, TimeUnit.SECONDS)
                 // Long-lived SSE connections rely on server keep-alives;
@@ -83,6 +95,40 @@ object NetworkModule {
                 // plugin via per-request `timeout { ... }` overrides.
                 readTimeout(90, TimeUnit.SECONDS)
                 retryOnConnectionFailure(true)
+                dispatcher(
+                    Dispatcher(
+                        Executors.newCachedThreadPool(
+                            object : ThreadFactory {
+                                override fun newThread(r: Runnable): Thread {
+                                    val thread = Thread(r, "okhttp-dispatcher-${threadCounter.incrementAndGet()}")
+                                    thread.isDaemon = true
+                                    thread.uncaughtExceptionHandler =
+                                        Thread.UncaughtExceptionHandler { t, e ->
+                                            if (e is NullPointerException &&
+                                                e.stackTrace.any {
+                                                    it.className.contains("OkHttpSSESession") &&
+                                                        it.methodName == "onFailure"
+                                                }
+                                            ) {
+                                                android.util.Log.w(
+                                                    "OkHttpSSE",
+                                                    "Suppressed known Ktor SSE race NPE on ${t.name}",
+                                                    e,
+                                                )
+                                            } else {
+                                                android.util.Log.e(
+                                                    "OkHttpSSE",
+                                                    "Uncaught exception on ${t.name}",
+                                                    e,
+                                                )
+                                            }
+                                        }
+                                    return thread
+                                }
+                            },
+                        ),
+                    ),
+                )
             }
         }
     }
