@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.ui.chat
 
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -55,6 +56,7 @@ sealed interface PendingInteraction {
 }
 
 /** Immutable render state for [ChatScreen]. */
+@Stable
 data class ChatUiState(
     val sessionId: String = "",
     val sessionTitle: String = "",

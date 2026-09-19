@@ -50,6 +50,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,7 +58,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -95,10 +95,9 @@ fun ChatScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val uiScope = rememberCoroutineScope()
-    val context = LocalContext.current
-    val onCodeCopied: (String) -> Unit = {
-        val message = context.getString(R.string.code_copied)
-        uiScope.launch { snackbarHostState.showSnackbar(message) }
+    val codeCopiedText = stringResource(R.string.code_copied)
+    val onCodeCopied: (String) -> Unit = remember(codeCopiedText) {
+        { _ -> uiScope.launch { snackbarHostState.showSnackbar(codeCopiedText) } }
     }
 
     // Re-entering the screen (or returning from background) mid-turn: reconcile
@@ -264,16 +263,20 @@ private fun MessageList(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
-    val ordered = state.messages.asReversed() // reverseLayout => newest first
+    val ordered = remember(state.messages) { state.messages.asReversed() }
 
     // A signature that changes on every token append so we can auto-follow.
-    val tailSignature = ordered.firstOrNull()?.parts?.sumOf { part ->
-        when (part) {
-            is MessagePart.TextPart -> part.content.length
-            is MessagePart.ReasoningPart -> part.thinking.length
-            else -> 0
+    val tailSignature by remember(ordered) {
+        derivedStateOf {
+            ordered.firstOrNull()?.parts?.sumOf { part ->
+                when (part) {
+                    is MessagePart.TextPart -> part.content.length
+                    is MessagePart.ReasoningPart -> part.thinking.length
+                    else -> 0
+                }
+            } ?: 0
         }
-    } ?: 0
+    }
     val atBottom = !listState.canScrollBackward
     LaunchedEffect(ordered.size, tailSignature) {
         if (atBottom && ordered.isNotEmpty()) listState.animateScrollToItem(0)
@@ -305,7 +308,11 @@ private fun MessageList(
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(items = ordered, key = { it.id }) { message ->
+            items(
+                items = ordered,
+                key = { it.id },
+                contentType = { if (it.role == MessageRole.USER) "user" else "assistant" },
+            ) { message ->
                 MessageBubble(
                     message = message,
                     isLive = message.id ==
