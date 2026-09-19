@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.androidx.baseline.profile)
 }
 
 // ============================================================================
@@ -199,4 +200,9 @@ dependencies {
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.rules)
+
+    // Baseline profile (P2-3): macrobenchmark generates the profile,
+    // profileinstaller applies it at install time.
+    implementation(libs.androidx.profileinstaller)
+    androidTestImplementation(libs.androidx.benchmark.macro.junit4)
 }
