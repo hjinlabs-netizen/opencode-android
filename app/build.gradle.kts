@@ -187,6 +187,9 @@ dependencies {
     // Secure storage
     implementation(libs.androidx.security.crypto)
 
+    // Preferences persistence (P2-6): DataStore-backed plain UI preferences.
+    implementation(libs.androidx.datastore.preferences)
+
     // Unit tests
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

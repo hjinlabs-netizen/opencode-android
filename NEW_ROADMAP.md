@@ -240,9 +240,15 @@
    `stop()` can assert *all* children terminated (currently relies on cancel propagation).
 5. **Cache eviction**: session/message caches are unbounded per connection; cap message list length
    (keep last N + `before=` pagination when the server supports it).
-6. **DataStore migration**: `PreferenceStore` (SharedPreferences) backs theme + recent dirs; migrate
-   to `androidx.datastore` (typed, coroutine-native) once the sync-read at `MainActivity` startup is
-   solved with `StartupInitializer`/snapshot flow.
+6. ✅ **DataStore migration (P2-6)**: plain UI preferences (`theme_mode`, `recent_directories`,
+   `last_selected_provider_id`/`last_selected_model_id`) moved off `SharedPreferences` onto
+   `androidx.datastore:datastore-preferences` (typed, coroutine-native). `DataStorePreferenceStore`
+   backs the unchanged synchronous `PreferenceStore` seam with an in-memory snapshot hydrated once at
+   construction (matching the blocking first-read profile the old `getSharedPreferences()` already had),
+   so the sync-read startup constraint — the reason this was deferred — is solved without touching the
+   repositories, `MainActivity` or their JVM tests. Existing installs are migrated transparently on the
+   post-upgrade launch (legacy → DataStore, keys unchanged, copy guarded to run only while DataStore is
+   empty). The Keystore AES-GCM token vault (`SecureSettingsStore`, Sprint 1d) is intentionally out of scope.
 7. **Memory**: `UnifiedDiffParser` snapshots `MutableList` per hunk (fine); SharedFlow buffer 256
    events ≈ negligible; watch `ToolCallPart.args` strings for huge tool inputs — truncate at
    decode (e.g. 64 KB) and stream the rest from `/session/{id}/message`.
