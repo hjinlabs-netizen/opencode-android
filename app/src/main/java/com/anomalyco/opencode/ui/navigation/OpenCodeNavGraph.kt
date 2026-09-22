@@ -13,6 +13,7 @@ import com.anomalyco.opencode.ui.chat.ChatScreen
 import com.anomalyco.opencode.ui.chat.ChatViewModel
 import com.anomalyco.opencode.ui.connection.ConnectionScreen
 import com.anomalyco.opencode.ui.files.DiffScreen
+import com.anomalyco.opencode.ui.files.DiffViewModel
 import com.anomalyco.opencode.ui.files.FileExplorerScreen
 import com.anomalyco.opencode.ui.files.FileExplorerViewModel
 import com.anomalyco.opencode.ui.session.FolderPickerScreen
@@ -46,6 +47,15 @@ object Routes {
             FILES
         } else {
             "$FILES?${FileExplorerViewModel.ARG_PATH}=" +
+                android.net.Uri.encode(path)
+        }
+
+    /** Opens the diff viewer scoped to [path] (empty = whole working tree). */
+    fun diff(path: String = "") =
+        if (path.isBlank()) {
+            DIFF
+        } else {
+            "$DIFF?${DiffViewModel.ARG_PATH}=" +
                 android.net.Uri.encode(path)
         }
 }
@@ -140,7 +150,7 @@ fun OpenCodeNavGraph(
                 onOpenFiles = { directory ->
                     navController.navigate(Routes.files(directory))
                 },
-                onOpenDiff = { navController.navigate(Routes.DIFF) },
+                onOpenDiff = { path -> navController.navigate(Routes.diff(path)) },
             )
         }
 
@@ -166,7 +176,15 @@ fun OpenCodeNavGraph(
             )
         }
 
-        composable(Routes.DIFF) {
+        composable(
+            route = "${Routes.DIFF}?${DiffViewModel.ARG_PATH}={${DiffViewModel.ARG_PATH}}",
+            arguments = listOf(
+                navArgument(DiffViewModel.ARG_PATH) {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+            ),
+        ) {
             DiffScreen(onBack = { navController.popBackStack() })
         }
 

@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Difference
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -55,6 +56,10 @@ import com.anomalyco.opencode.ui.common.MarkdownText
 import com.anomalyco.opencode.ui.theme.Danger
 import com.anomalyco.opencode.ui.theme.Success
 import com.anomalyco.opencode.ui.theme.Warning
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Renders any [MessagePart] as its polymorphic card. This is the single place
@@ -66,11 +71,12 @@ fun MessagePartCard(
     part: MessagePart,
     modifier: Modifier = Modifier,
     onCodeCopied: (String) -> Unit = {},
+    onOpenDiff: (String) -> Unit = {},
 ) {
     when (part) {
         is MessagePart.TextPart -> TextPartCard(part, modifier, onCodeCopied)
         is MessagePart.ReasoningPart -> ReasoningPartCard(part, modifier)
-        is MessagePart.ToolCallPart -> ToolCallPartCard(part, modifier)
+        is MessagePart.ToolCallPart -> ToolCallPartCard(part, modifier, onOpenDiff)
         is MessagePart.ShellPart -> ShellPartCard(part, modifier)
         is MessagePart.StepPart -> StepPartCard(part, modifier)
     }
@@ -155,9 +161,14 @@ fun ReasoningPartCard(part: MessagePart.ReasoningPart, modifier: Modifier = Modi
 // ---- Tool call (status chip) -----------------------------------------------
 
 @Composable
-fun ToolCallPartCard(part: MessagePart.ToolCallPart, modifier: Modifier = Modifier) {
+fun ToolCallPartCard(
+    part: MessagePart.ToolCallPart,
+    modifier: Modifier = Modifier,
+    onOpenDiff: (String) -> Unit = {},
+) {
     var expanded by remember(part.callId) { mutableStateOf(false) }
     val hasArgs = part.args.isNotBlank() && part.args != "{}"
+    val diffPath = remember(part.args) { extractDiffPath(part.args) }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -181,6 +192,17 @@ fun ToolCallPartCard(part: MessagePart.ToolCallPart, modifier: Modifier = Modifi
                 maxLines = 1,
             )
             ToolStatusChip(status = part.status)
+            if (diffPath != null) {
+                // P1-1 deep link: jump straight to this file's color-coded diff.
+                IconButton(onClick = { onOpenDiff(diffPath) }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        imageVector = Icons.Filled.Difference,
+                        contentDescription = stringResource(R.string.chat_changes),
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.secondary,
+                    )
+                }
+            }
             if (hasArgs) {
                 Icon(
                     imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
@@ -212,6 +234,30 @@ fun ToolCallPartCard(part: MessagePart.ToolCallPart, modifier: Modifier = Modifi
             }
         }
     }
+}
+
+/** Lenient parser for tool-call argument JSON (P1-1 path extraction). */
+private val toolArgsJson = Json { ignoreUnknownKeys = true; isLenient = true }
+
+/** Argument keys that carry a file path, checked in priority order. */
+private val DIFF_ARG_KEYS = listOf("path", "filePath", "file", "target")
+
+/**
+ * Extracts a file path from a tool call's raw JSON [args] so its card can
+ * deep-link to that file's diff (P1-1). Reads the known keys
+ * (path/filePath/file/target) and returns null when none is present or the
+ * payload is blank, unparseable or truncated — so callers never show a
+ * clickable affordance for a path they would have to guess.
+ */
+internal fun extractDiffPath(args: String): String? {
+    if (args.isBlank() || args == "{}") return null
+    val element = runCatching { toolArgsJson.parseToJsonElement(args) }.getOrNull()
+        as? JsonObject ?: return null
+    for (key in DIFF_ARG_KEYS) {
+        val value = (element[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
+        if (!value.isNullOrBlank()) return value
+    }
+    return null
 }
 
 /** Localized notice rendered whenever a payload was cut at a memory limit. */

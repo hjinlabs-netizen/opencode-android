@@ -89,7 +89,7 @@ import kotlinx.coroutines.launch
 fun ChatScreen(
     onBack: () -> Unit,
     onOpenFiles: (String) -> Unit = {},
-    onOpenDiff: () -> Unit = {},
+    onOpenDiff: (String) -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -190,7 +190,7 @@ fun ChatScreen(
                     IconButton(onClick = { onOpenFiles(state.directory) }) {
                         Icon(Icons.Filled.Folder, contentDescription = stringResource(R.string.chat_files))
                     }
-                    IconButton(onClick = onOpenDiff) {
+                    IconButton(onClick = { onOpenDiff("") }) {
                         Icon(Icons.Filled.Difference, contentDescription = stringResource(R.string.chat_changes))
                     }
                     IconButton(onClick = viewModel::refresh) {
@@ -218,6 +218,7 @@ fun ChatScreen(
         MessageList(
             state = state,
             onCodeCopied = onCodeCopied,
+            onOpenDiff = onOpenDiff,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -260,6 +261,7 @@ fun ChatScreen(
 private fun MessageList(
     state: ChatUiState,
     onCodeCopied: (String) -> Unit,
+    onOpenDiff: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -318,6 +320,7 @@ private fun MessageList(
                     isLive = message.id ==
                         MessageAssembler.liveMessageId(state.sessionId) && state.isBusy,
                     onCodeCopied = onCodeCopied,
+                    onOpenDiff = onOpenDiff,
                 )
             }
             if (state.historyTooLarge) {
@@ -342,6 +345,7 @@ private fun MessageBubble(
     message: ChatMessage,
     isLive: Boolean,
     onCodeCopied: (String) -> Unit,
+    onOpenDiff: (String) -> Unit,
 ) {
     val isUser = message.role == MessageRole.USER
     Column(
@@ -368,7 +372,11 @@ private fun MessageBubble(
                     TypingDots()
                 } else {
                     message.parts.forEach { part ->
-                        MessagePartCard(part, onCodeCopied = onCodeCopied)
+                        MessagePartCard(
+                            part,
+                            onCodeCopied = onCodeCopied,
+                            onOpenDiff = onOpenDiff,
+                        )
                     }
                 }
             }

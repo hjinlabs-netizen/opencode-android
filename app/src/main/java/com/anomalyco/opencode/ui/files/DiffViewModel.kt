@@ -1,5 +1,6 @@
 package com.anomalyco.opencode.ui.files
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anomalyco.opencode.domain.error.OpenCodeError
@@ -24,6 +25,7 @@ data class DiffUiState(
 /** Loads the working-tree diff (agent changes vs HEAD) for the diff viewer. */
 @HiltViewModel
 class DiffViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     private val fileRepository: FileRepository,
 ) : ViewModel() {
 
@@ -34,6 +36,13 @@ class DiffViewModel @Inject constructor(
     private val _expanded = MutableStateFlow<Set<Int>>(setOf(0))
     val expanded: StateFlow<Set<Int>> = _expanded.asStateFlow()
 
+    /**
+     * Optional per-file deep-link target (P1-1). Blank shows the whole
+     * working tree; a path scopes the viewer to that single file's diff.
+     */
+    private val targetPath: String =
+        savedStateHandle.get<String>(ARG_PATH).orEmpty().let { if (it == "null") "" else it }
+
     init {
         refresh()
     }
@@ -41,9 +50,28 @@ class DiffViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            fileRepository.workingTreeDiff()
-                .onSuccess { diffs ->
-                    _uiState.update { it.copy(files = diffs, isLoading = false) }
+            if (targetPath.isBlank()) {
+                fileRepository.workingTreeDiff()
+                    .onSuccess { diffs ->
+                        _uiState.update { it.copy(files = diffs, isLoading = false) }
+                    }
+                    .onFailure { error ->
+                        _uiState.update { it.copy(isLoading = false, error = error.toDisplayError()) }
+                    }
+                return@launch
+            }
+            // A concrete target must resolve to that exact file. The repository
+            // falls back to an unrelated row when the requested path is absent,
+            // so re-verify the path here and never display the wrong file.
+            fileRepository.diffFile(targetPath)
+                .onSuccess { diff ->
+                    if (diff.path == targetPath) {
+                        _uiState.update { it.copy(files = listOf(diff), isLoading = false) }
+                    } else {
+                        _uiState.update {
+                            it.copy(files = emptyList(), isLoading = false, error = OpenCodeError.Http(404))
+                        }
+                    }
                 }
                 .onFailure { error ->
                     _uiState.update { it.copy(isLoading = false, error = error.toDisplayError()) }
@@ -71,4 +99,8 @@ class DiffViewModel @Inject constructor(
     }
 
     fun onErrorShown() = _uiState.update { it.copy(error = null) }
+
+    companion object {
+        const val ARG_PATH = "path"
+    }
 }
