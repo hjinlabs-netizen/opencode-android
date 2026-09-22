@@ -36,9 +36,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.anomalyco.opencode.R
+import com.anomalyco.opencode.data.PayloadLimits
+import com.anomalyco.opencode.data.remote.UnifiedDiffParser
+import com.anomalyco.opencode.domain.model.FileDiff
 import com.anomalyco.opencode.domain.model.PermissionDecision
 import com.anomalyco.opencode.domain.model.PermissionRequest
 import com.anomalyco.opencode.domain.model.QuestionRequest
+import com.anomalyco.opencode.ui.files.DiffFileCard
 
 /**
  * Material 3 dialog for a pending [PermissionRequest]: shows the proposed
@@ -71,7 +75,7 @@ fun PermissionDialog(
                 )
                 CodePreview(stringResource(R.string.permission_file), request.path)
                 CodePreview(stringResource(R.string.permission_command), request.command)
-                CodePreview(stringResource(R.string.permission_diff), request.diff, tall = true)
+                PermissionDiff(request.diff)
             }
         },
         confirmButton = {
@@ -90,6 +94,59 @@ fun PermissionDialog(
             }
         },
     )
+}
+
+/**
+ * P1-4: render the proposed diff with the structured, color-coded
+ * [DiffFileCard] (the same renderer the file-diff screen uses) instead of a
+ * raw monospace block, so an agent's pending edit is scannable at a glance.
+ * Falls back to plain [CodePreview] whenever the patch is blank, unparseable,
+ * or not a unified diff, so nothing that previously rendered can disappear.
+ */
+@Composable
+private fun PermissionDiff(diff: String?) {
+    if (diff.isNullOrBlank()) return
+    val parsed = remember(diff) { parsePermissionDiff(diff) }
+    var expanded by remember(diff) { mutableStateOf(true) }
+
+    if (parsed == null) {
+        CodePreview(stringResource(R.string.permission_diff), diff, tall = true)
+        return
+    }
+
+    Column {
+        Text(
+            text = stringResource(R.string.permission_diff),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        DiffFileCard(
+            diff = parsed,
+            expanded = expanded,
+            onToggle = { expanded = !expanded },
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .fillMaxWidth()
+                .heightIn(max = 320.dp)
+                .verticalScroll(rememberScrollState()),
+        )
+    }
+}
+
+/**
+ * Cap the raw patch at [PayloadLimits.MAX_PATCH_CHARS] BEFORE parsing (so a
+ * huge diff cannot explode into an unbounded line graph - mirroring the
+ * FileRepository / Sprint M.3 boundary), then parse it into a render-ready
+ * [FileDiff] carrying the truncation flag. Returns null to signal "fall back
+ * to plain text": blank input, a non-diff payload, or a parse that yields no
+ * hunks. Kept as a pure function so it is unit-testable off the UI thread.
+ */
+internal fun parsePermissionDiff(raw: String?): FileDiff? {
+    if (raw.isNullOrBlank()) return null
+    val capped = PayloadLimits.patch(raw)
+    return UnifiedDiffParser.parseSingle(capped.text)
+        ?.takeIf { it.hunks.isNotEmpty() }
+        ?.copy(truncated = capped.truncated)
 }
 
 @Composable
