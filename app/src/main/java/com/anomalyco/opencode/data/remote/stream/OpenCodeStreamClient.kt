@@ -10,6 +10,7 @@ import com.anomalyco.opencode.domain.model.StreamStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -66,6 +67,9 @@ class OpenCodeStreamClient @Inject constructor(
     /** Test seam: deterministic jitter in backoff tests. */
     internal var jitter: () -> Double = { Random.nextDouble() }
 
+    /** Test seam: the currently-owned supervisor job, if any. */
+    internal val activeConnectionJob: Job? get() = connectionJob
+
     /**
      * Connect (or reconfigure) the stream to [config].
      * Idempotent for the same server; changing the URL/token restarts the loop.
@@ -93,10 +97,20 @@ class OpenCodeStreamClient @Inject constructor(
         connectionJob = scope.launch { supervise(config) }
     }
 
-    private fun stopLocked() {
-        connectionJob?.cancel()
+    /**
+     * Cancel the owned supervisor coroutine and *await* its full termination
+     * before returning (P2-4). Callers (`start`/`stop`/`reconnect`) hold the
+     * mutex, so joining here guarantees the previous SSE supervisor has run its
+     * cancellation unwinding — closing the transport and emitting nothing more
+     * — before a new supervisor launches or `stop()` reports done. The status
+     * is set last so a dying supervisor can never overwrite it with
+     * `Connecting`/`Error` after teardown.
+     */
+    private suspend fun stopLocked() {
+        val job = connectionJob
         connectionJob = null
         activeConfig = null
+        job?.cancelAndJoin()
         _status.value = StreamStatus.Disconnected
     }
 

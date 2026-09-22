@@ -13,6 +13,9 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
@@ -171,6 +174,83 @@ class OpenCodeStreamClientTest {
         runCurrent()
         assertEquals(1, transport.calls)
         assertEquals(StreamStatus.Disconnected, client.status.value)
+    }
+
+    @Test
+    fun `stop returns only after the supervisor coroutine has terminated`() = runTest {
+        // P2-4: stop() must await full termination (cancel + join), not just
+        // fire-and-forget cancel(). The transport's `finally` (which runs when
+        // the supervisor coroutine unwinds) must have executed by the time
+        // stop() returns — impossible if stop() only called cancel().
+        val transport = object : EventTransport {
+            var active = 0
+            override fun frames(config: ServerConfig, onConnected: () -> Unit): Flow<String> = flow {
+                active++
+                onConnected()
+                try {
+                    awaitCancellation()
+                } finally {
+                    active--
+                }
+            }
+        }
+        val client = clientFor(transport, backgroundScope)
+
+        client.start(config)
+        runCurrent()
+        assertEquals(1, transport.active)
+        val job = client.activeConnectionJob
+        assertNotNull(job)
+        assertTrue(job!!.isActive)
+
+        client.stop()
+
+        assertTrue("supervisor job must be completed once stop() returns", job.isCompleted)
+        assertNull("no owned job remains after stop()", client.activeConnectionJob)
+        assertEquals("teardown finally must have run during stop()", 0, transport.active)
+        assertEquals(StreamStatus.Disconnected, client.status.value)
+    }
+
+    @Test
+    fun `reconnect awaits the previous supervisor before launching a new one`() = runTest {
+        // P2-4: reconnect() must not overlap an old and a new supervisor. The
+        // previous job must be fully terminated (and its transport unwound)
+        // the instant reconnect() returns, before the replacement runs.
+        val transport = object : EventTransport {
+            var active = 0
+            var maxActive = 0
+            override fun frames(config: ServerConfig, onConnected: () -> Unit): Flow<String> = flow {
+                active++
+                if (active > maxActive) maxActive = active
+                onConnected()
+                try {
+                    awaitCancellation()
+                } finally {
+                    active--
+                }
+            }
+        }
+        val client = clientFor(transport, backgroundScope)
+
+        client.start(config)
+        runCurrent()
+        val old = client.activeConnectionJob
+        assertNotNull(old)
+        assertEquals(1, transport.active)
+
+        client.reconnect()
+
+        assertTrue("previous supervisor must be joined before reconnect() returns", old!!.isCompleted)
+        assertEquals("previous transport must be unwound before the new one starts", 0, transport.active)
+        val replacement = client.activeConnectionJob
+        assertNotNull(replacement)
+        assertNotSame(old, replacement)
+
+        runCurrent()
+        assertEquals("exactly one supervisor active after the replacement starts", 1, transport.active)
+        assertEquals("old and new supervisors must never be active simultaneously", 1, transport.maxActive)
+
+        client.stop()
     }
 
     @Test
