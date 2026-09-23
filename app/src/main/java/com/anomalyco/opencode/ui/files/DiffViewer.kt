@@ -16,21 +16,26 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,6 +47,7 @@ import com.anomalyco.opencode.domain.model.FileDiff
 import com.anomalyco.opencode.ui.theme.Danger
 import com.anomalyco.opencode.ui.theme.Success
 import com.anomalyco.opencode.ui.theme.Warning
+import kotlinx.coroutines.launch
 
 /**
  * One changed file inside the diff viewer: a header row (status icon, path,
@@ -53,7 +59,11 @@ fun DiffFileCard(
     expanded: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    canCopy: Boolean = false,
+    onCopied: () -> Unit = {},
 ) {
+    val clipboard = LocalClipboardManager.current
+    val copyScope = rememberCoroutineScope()
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -100,6 +110,22 @@ fun DiffFileCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = Danger,
                 )
+                if (canCopy) {
+                    IconButton(
+                        onClick = {
+                            copyScope.launch { clipboard.setText(AnnotatedString(diff.toPatchText())) }
+                            onCopied()
+                        },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.ContentCopy,
+                            contentDescription = stringResource(R.string.diff_copy_patch),
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 Icon(
                     imageVector = if (expanded) {
                         Icons.Filled.ExpandLess
@@ -141,6 +167,28 @@ fun DiffFileCard(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Reconstructs a unified-diff patch for [this] file from its parsed hunks so
+ * the copy-patch affordance yields pasteable, git-style content. The parsed
+ * line text is stored without its leading marker, so the `+`/`-`/space prefix
+ * is re-applied from each line's kind.
+ */
+internal fun FileDiff.toPatchText(): String = buildString {
+    append("--- ").append(oldPath).append('\n')
+    append("+++ ").append(newPath).append('\n')
+    for (hunk in hunks) {
+        append(hunk.header).append('\n')
+        for (line in hunk.lines) {
+            val prefix = when (line.kind) {
+                DiffLineKind.ADDED -> "+"
+                DiffLineKind.DELETED -> "-"
+                DiffLineKind.CONTEXT -> " "
+            }
+            append(prefix).append(line.text).append('\n')
         }
     }
 }

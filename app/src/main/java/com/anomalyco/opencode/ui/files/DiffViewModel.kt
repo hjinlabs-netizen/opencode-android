@@ -20,6 +20,15 @@ data class DiffUiState(
     val files: List<FileDiff> = emptyList(),
     val isLoading: Boolean = true,
     val error: OpenCodeError? = null,
+    /** The per-file deep-link target (P1-1); blank means the whole working tree. */
+    val targetPath: String = "",
+    /**
+     * True when a per-file deep link resolved to no diff for that specific
+     * file. Renders the focused "No diff available for this file" empty state
+     * instead of the generic working-tree "No changes" screen or a transport
+     * error snackbar (P1 polish).
+     */
+    val noDiffForFile: Boolean = false,
 )
 
 /** Loads the working-tree diff (agent changes vs HEAD) for the diff viewer. */
@@ -49,7 +58,9 @@ class DiffViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update {
+                it.copy(isLoading = true, error = null, noDiffForFile = false, targetPath = targetPath)
+            }
             if (targetPath.isBlank()) {
                 fileRepository.workingTreeDiff()
                     .onSuccess { diffs ->
@@ -69,12 +80,22 @@ class DiffViewModel @Inject constructor(
                         _uiState.update { it.copy(files = listOf(diff), isLoading = false) }
                     } else {
                         _uiState.update {
-                            it.copy(files = emptyList(), isLoading = false, error = OpenCodeError.Http(404))
+                            it.copy(files = emptyList(), isLoading = false, noDiffForFile = true)
                         }
                     }
                 }
                 .onFailure { error ->
-                    _uiState.update { it.copy(isLoading = false, error = error.toDisplayError()) }
+                    val display = error.toDisplayError()
+                    if (display is OpenCodeError.EndpointMissing) {
+                        // No diff row for this file (unchanged file, or a
+                        // server without a diff endpoint): a calm per-file empty
+                        // state, not a transport snackbar.
+                        _uiState.update {
+                            it.copy(files = emptyList(), isLoading = false, noDiffForFile = true)
+                        }
+                    } else {
+                        _uiState.update { it.copy(isLoading = false, error = display) }
+                    }
                 }
         }
     }

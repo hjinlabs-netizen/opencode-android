@@ -2,6 +2,7 @@ package com.anomalyco.opencode.ui.files
 
 import androidx.lifecycle.SavedStateHandle
 import com.anomalyco.opencode.domain.error.OpenCodeError
+import com.anomalyco.opencode.domain.error.OpenCodeException
 import com.anomalyco.opencode.domain.model.FileContent
 import com.anomalyco.opencode.domain.model.FileDiff
 import com.anomalyco.opencode.domain.model.FileListing
@@ -70,12 +71,14 @@ class DiffViewModelTest {
 
         assertEquals(listOf("b.kt"), vm.uiState.value.files.map { it.path })
         assertEquals(null, vm.uiState.value.error)
+        assertEquals(false, vm.uiState.value.noDiffForFile)
     }
 
     @Test
-    fun `target path never shows a mismatched fallback file`() = runTest {
+    fun `target path rejects a mismatched fallback file with the per-file empty state`() = runTest {
         // The repository falls back to an unrelated row when the path is absent;
-        // the VM must reject it and surface an explicit not-found state.
+        // the VM must reject it and show "No diff available for this file",
+        // never the wrong file and never a transport snackbar.
         val vm = DiffViewModel(
             SavedStateHandle(mapOf(DiffViewModel.ARG_PATH to "missing.kt")),
             FakeFiles(three, single = { Result.success(diff("a.kt")) }),
@@ -83,6 +86,45 @@ class DiffViewModelTest {
         advanceUntilIdle()
 
         assertEquals(emptyList<FileDiff>(), vm.uiState.value.files)
-        assertEquals(OpenCodeError.Http(404), vm.uiState.value.error)
+        assertEquals(true, vm.uiState.value.noDiffForFile)
+        assertEquals("missing.kt", vm.uiState.value.targetPath)
+        assertEquals(null, vm.uiState.value.error)
+    }
+
+    @Test
+    fun `missing diff endpoint for the target resolves to the per-file empty state`() = runTest {
+        val vm = DiffViewModel(
+            SavedStateHandle(mapOf(DiffViewModel.ARG_PATH to "unchanged.kt")),
+            FakeFiles(
+                three,
+                single = {
+                    Result.failure(OpenCodeException(OpenCodeError.EndpointMissing("diff:unchanged.kt")))
+                },
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(emptyList<FileDiff>(), vm.uiState.value.files)
+        assertEquals(true, vm.uiState.value.noDiffForFile)
+        assertEquals(null, vm.uiState.value.error)
+    }
+
+    @Test
+    fun `a genuine transport failure still surfaces as an error, not the empty state`() = runTest {
+        val vm = DiffViewModel(
+            SavedStateHandle(mapOf(DiffViewModel.ARG_PATH to "a.kt")),
+            FakeFiles(
+                three,
+                single = {
+                    Result.failure(
+                        OpenCodeException(OpenCodeError.Network(OpenCodeError.NetworkKind.Connect)),
+                    )
+                },
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(false, vm.uiState.value.noDiffForFile)
+        assertEquals(OpenCodeError.Network(OpenCodeError.NetworkKind.Connect), vm.uiState.value.error)
     }
 }

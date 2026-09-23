@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -37,6 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anomalyco.opencode.R
 import com.anomalyco.opencode.ui.common.stringForError
+import kotlinx.coroutines.launch
 
 /**
  * Dedicated route showing the agent's working-tree changes as color-coded
@@ -52,6 +54,11 @@ fun DiffScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val expanded by viewModel.expanded.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val uiScope = rememberCoroutineScope()
+    val patchCopiedText = stringResource(R.string.diff_patch_copied)
+    val onPatchCopied: () -> Unit = remember(patchCopiedText) {
+        { uiScope.launch { snackbarHostState.showSnackbar(patchCopiedText) } }
+    }
     val allExpanded = state.files.isNotEmpty() && expanded.size == state.files.size
 
     val errorText = state.error?.let { stringForError(it) }
@@ -106,24 +113,34 @@ fun DiffScreen(
                 contentAlignment = Alignment.Center,
             ) { CircularProgressIndicator() }
 
-            state.files.isEmpty() -> Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    text = stringResource(R.string.diff_none_title),
-                    style = MaterialTheme.typography.titleMedium,
+            state.files.isEmpty() -> {
+                // A per-file deep link that found no diff gets a focused empty
+                // state naming the file; the whole-tree view keeps the generic
+                // "No changes" copy.
+                val title = stringResource(
+                    if (state.noDiffForFile) R.string.diff_no_file_title else R.string.diff_none_title,
                 )
-                Spacer(Modifier.size(4.dp))
-                Text(
-                    text = stringResource(R.string.diff_none_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                val body = if (state.noDiffForFile) {
+                    stringResource(R.string.diff_no_file_body, state.targetPath)
+                } else {
+                    stringResource(R.string.diff_none_body)
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(text = title, style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.size(4.dp))
+                    Text(
+                        text = body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             else -> LazyColumn(
@@ -138,6 +155,8 @@ fun DiffScreen(
                         diff = diff,
                         expanded = index in expanded,
                         onToggle = { viewModel.toggle(index) },
+                        canCopy = true,
+                        onCopied = onPatchCopied,
                     )
                 }
             }

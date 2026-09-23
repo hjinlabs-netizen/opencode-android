@@ -160,8 +160,12 @@
     <string name="diff_title">Changes</string>
     <string name="diff_none_title">No changes</string>
     <string name="diff_none_body">No files differ from HEAD in the working tree.</string>
+    <string name="diff_no_file_title">No diff available for this file</string>
+    <string name="diff_no_file_body">%1$s has no changes against HEAD.</string>
     <string name="diff_expand_all">Expand all</string>
     <string name="diff_collapse_all">Collapse all</string>
+    <string name="diff_copy_patch">Copy patch</string>
+    <string name="diff_patch_copied">Patch copied</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>

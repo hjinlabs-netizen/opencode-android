@@ -151,8 +151,12 @@
     <string name="diff_title">Değişiklikler</string>
     <string name="diff_none_title">Değişiklik yok</string>
     <string name="diff_none_body">Çalışma ağacında HEAD\'e göre değişen dosya bulunmuyor.</string>
+    <string name="diff_no_file_title">Bu dosya için diff yok</string>
+    <string name="diff_no_file_body">%1$s, HEAD\'e göre değişiklik içermiyor.</string>
     <string name="diff_expand_all">Tümünü genişlet</string>
     <string name="diff_collapse_all">Tümünü daralt</string>
+    <string name="diff_copy_patch">Yamayı kopyala</string>
+    <string name="diff_patch_copied">Yama kopyalandı</string>
 
     <!-- Settings -->
     <string name="settings_title">Ayarlar</string>
